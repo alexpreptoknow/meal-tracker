@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#ffffff">
+  <title>Gut Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+    .app { max-width: 480px; margin: 0 auto; padding: 1rem; padding-bottom: 2rem; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; padding-top: 0.5rem; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; background: #e8e8e4; border-radius: 12px; padding: 4px; }
+    .tab { flex: 1; padding: 7px 4px; border: none; background: transparent; border-radius: 8px; font-size: 12px; font-weight: 400; color: #666; cursor: pointer; transition: all 0.15s; }
+    .tab.active { background: #fff; color: #1a1a1a; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .section { display: none; }
+    .section.active { display: block; }
+    .card { background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .field-label { font-size: 12px; color: #666; margin-bottom: 5px; display: block; }
+    .field-label .hint { font-size: 11px; opacity: 0.7; margin-left: 4px; }
+    .field-row { margin-bottom: 14px; }
+    textarea, input[type=text], input[type=time], input[type=date], input[type=number], select {
+      width: 100%; font-size: 14px; padding: 9px 11px; border-radius: 8px;
+      border: 0.5px solid rgba(0,0,0,0.15); background: #f5f5f0; color: #1a1a1a;
+      font-family: inherit; -webkit-appearance: none; appearance: none;
+    }
+    textarea { resize: none; }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+    .datetime-row { display: flex; gap: 8px; }
+    .datetime-row > div { flex: 1; }
+    .auto-tag { font-size: 10px; background: #e1f5ee; color: #0f6e56; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+    .mood-row { display: flex; gap: 6px; }
+    .mood-col { flex: 1; }
+    .mood-btn { width: 100%; padding: 8px 4px; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 8px; background: #f5f5f0; cursor: pointer; font-size: 16px; text-align: center; transition: all 0.15s; }
+    .mood-btn.selected { border: 1.5px solid #1d9e75; background: #e1f5ee; }
+    .mood-label { font-size: 9px; color: #888; text-align: center; margin-top: 3px; display: block; }
+    .photo-upload { border: 1.5px dashed rgba(0,0,0,0.2); border-radius: 12px; padding: 1.25rem; text-align: center; cursor: pointer; background: #f5f5f0; transition: all 0.15s; }
+    .photo-upload:active { background: #eee; }
+    .photo-preview { width: 100%; border-radius: 8px; margin-top: 10px; display: none; }
+    .ai-result { background: #f5f5f0; border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-top: 10px; display: none; border-left: 2px solid #1d9e75; }
+    .macro-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+    .macro-card { background: #fff; border-radius: 8px; padding: 7px; text-align: center; border: 0.5px solid rgba(0,0,0,0.1); }
+    .macro-val { font-size: 15px; font-weight: 500; }
+    .macro-lbl { font-size: 10px; color: #888; margin-top: 2px; }
+    .btn-primary { width: 100%; padding: 13px; background: #1d9e75; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.15s; margin-top: 6px; -webkit-tap-highlight-color: transparent; }
+    .btn-primary:active { background: #0f6e56; transform: scale(0.99); }
+    .btn-primary:disabled { background: #ccc; color: #999; }
+    .btn-secondary { width: 100%; padding: 10px; background: transparent; color: #666; border: 0.5px solid rgba(0,0,0,0.15); border-radius: 10px; font-size: 13px; cursor: pointer; margin-top: 6px; }
+    .status-msg { text-align: center; font-size: 13px; padding: 9px; border-radius: 8px; margin-top: 8px; display: none; }
+    .status-ok { background: #e1f5ee; color: #0f6e56; }
+    .status-err { background: #fcebeb; color: #a32d2d; }
+    .bloat-scale { display: flex; gap: 5px; }
+    .bloat-btn { flex: 1; padding: 10px 2px; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 8px; background: #f5f5f0; cursor: pointer; font-size: 14px; font-weight: 500; text-align: center; transition: all 0.15s; }
+    .bloat-btn.selected { border: 1.5px solid #d85a30; background: #faece7; color: #993c1d; }
+    .sym-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+    .sym-btn { padding: 7px 12px; border: 0.5px solid rgba(0,0,0,0.12); border-radius: 20px; background: #f5f5f0; cursor: pointer; font-size: 12px; color: #555; transition: all 0.15s; }
+    .sym-btn.selected { border-color: #d85a30; background: #faece7; color: #993c1d; }
+    .meal-item { background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 12px; background: #f0f0ec; color: #666; }
+    .pill-red { background: #faece7; color: #993c1d; }
+    .pill-green { background: #e1f5ee; color: #0f6e56; }
+    .pill-blue { background: #e6f1fb; color: #185fa5; }
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .analyze-btn { width: 100%; padding: 10px; background: transparent; color: #1d9e75; border: 1px solid #1d9e75; border-radius: 8px; font-size: 13px; cursor: pointer; margin-top: 8px; transition: all 0.15s; font-family: inherit; }
+    .analyze-btn:active { background: #e1f5ee; }
+    .analyze-btn:disabled { opacity: 0.5; }
+    .section-title { font-size: 11px; font-weight: 500; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .progress-bar-wrap { background: #f0f0ec; border-radius: 6px; height: 7px; overflow: hidden; margin-top: 5px; }
+    .progress-bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s; }
+    .remaining-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin-bottom: 1rem; }
+    .rem-card { background: #f5f5f0; border-radius: 8px; padding: 10px 8px; text-align: center; }
+    .rem-val { font-size: 17px; font-weight: 500; }
+    .rem-lbl { font-size: 10px; color: #888; margin-top: 2px; }
+    .week-bar-row { display: flex; align-items: flex-end; gap: 6px; height: 80px; margin: 10px 0 4px; }
+    .wbar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; height: 100%; justify-content: flex-end; }
+    .wbar { width: 100%; border-radius: 4px 4px 0 0; min-height: 3px; }
+    .weight-item { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 0.5px solid rgba(0,0,0,0.08); font-size: 13px; }
+    .weight-item:last-child { border-bottom: none; }
+    .ingredients-badge { font-size: 10px; background: #e6f1fb; color: #185fa5; padding: 2px 7px; border-radius: 10px; margin-left: 6px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div style="font-size:20px;font-weight:600;">Gut Tracker</div>
+      <div style="font-size:12px;color:#888;" id="today-date"></div>
+    </div>
+    <button class="tab" style="width:auto;padding:7px 13px;background:#fff;border:0.5px solid rgba(0,0,0,0.12);border-radius:8px;" onclick="showSection('settings')">Settings</button>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showSection('log')">Log meal</button>
+    <button class="tab" onclick="showSection('symptoms')">Symptoms</button>
+    <button class="tab" onclick="showSection('history')">History</button>
+    <button class="tab" onclick="showSection('weight')">Weight</button>
+  </div>
+
+  <!-- LOG MEAL -->
+  <div id="section-log" class="section active">
+    <div class="card">
+      <div class="field-row">
+        <span class="field-label">Photo <span class="hint">— optional, improves detection</span></span>
+        <div class="photo-upload" onclick="document.getElementById('photo-input').click()">
+          <div id="upload-icon" style="font-size:24px;color:#aaa;">+</div>
+          <div id="upload-label" style="font-size:13px;color:#aaa;margin-top:3px;">Tap to add photo</div>
+          <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)">
+        </div>
+        <img id="photo-preview" class="photo-preview">
+      </div>
+      <div class="field-row">
+        <span class="field-label">Ingredients <span class="ingredients-badge">improves accuracy</span></span>
+        <textarea id="ingredients" rows="3" placeholder="e.g. 200g raw minced beef, 5g ghee, 150g cooked white rice, 2 eggs..."></textarea>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;">Plain text. Weights optional but help a lot.</div>
+      </div>
+      <button class="analyze-btn" id="analyze-btn" onclick="analyzeWithClaude()">Analyze with Claude</button>
+      <div class="ai-result" id="ai-result">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <div style="font-size:11px;color:#0f6e56;font-weight:500;">Claude detected</div>
+          <div id="ai-confidence" style="font-size:11px;color:#888;"></div>
+        </div>
+        <div id="ai-meal-name" style="font-weight:500;font-size:14px;margin-bottom:6px;"></div>
+        <div class="macro-grid">
+          <div class="macro-card"><div class="macro-val" id="ai-cal">-</div><div class="macro-lbl">kcal</div></div>
+          <div class="macro-card"><div class="macro-val" id="ai-pro">-</div><div class="macro-lbl">protein</div></div>
+          <div class="macro-card"><div class="macro-val" id="ai-carb">-</div><div class="macro-lbl">carbs</div></div>
+          <div class="macro-card"><div class="macro-val" id="ai-fat">-</div><div class="macro-lbl">fat</div></div>
+        </div>
+        <div id="ai-notes" style="font-size:11px;color:#888;margin-top:6px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="field-row">
+        <span class="field-label">Date &amp; time <span class="auto-tag" id="auto-tag">auto</span></span>
+        <div class="datetime-row">
+          <div><input type="date" id="meal-date" onchange="markUserEdited()"></div>
+          <div><input type="time" id="meal-time" onchange="markUserEdited()"></div>
+        </div>
+        <div style="font-size:11px;color:#aaa;margin-top:4px;" id="time-hint">Updates when you add a photo.</div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Meal name <span class="hint">— edit Claude's guess</span></span>
+        <input type="text" id="meal-name" placeholder="e.g. Grilled chicken with rice">
+      </div>
+      <div class="field-row">
+        <span class="field-label">Stress / mood before eating <span class="hint">— helps spot stress-gut patterns</span></span>
+        <div class="mood-row">
+          <div class="mood-col"><button class="mood-btn" onclick="selectMood(this,'calm')">😌</button><span class="mood-label">Calm</span></div>
+          <div class="mood-col"><button class="mood-btn" onclick="selectMood(this,'neutral')">😐</button><span class="mood-label">Neutral</span></div>
+          <div class="mood-col"><button class="mood-btn" onclick="selectMood(this,'rushed')">😅</button><span class="mood-label">Rushed</span></div>
+          <div class="mood-col"><button class="mood-btn" onclick="selectMood(this,'stressed')">😰</button><span class="mood-label">Stressed</span></div>
+          <div class="mood-col"><button class="mood-btn" onclick="selectMood(this,'happy')">😄</button><span class="mood-label">Happy</span></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Notes</span>
+        <textarea id="meal-notes" rows="2" placeholder="Anything else to add..."></textarea>
+      </div>
+    </div>
+    <button class="btn-primary" id="save-btn" onclick="saveMeal()">Save meal</button>
+    <div class="status-msg" id="log-status"></div>
+  </div>
+
+  <!-- SYMPTOMS -->
+  <div id="section-symptoms" class="section">
+    <div class="card">
+      <div class="field-row">
+        <span class="field-label">Linked meal <span class="hint">— auto-selected last meal</span></span>
+        <select id="sym-meal-select"></select>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Date &amp; time symptoms started <span class="auto-tag">auto</span></span>
+        <div class="datetime-row">
+          <div><input type="date" id="sym-date"></div>
+          <div><input type="time" id="sym-time"></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Bloating score</span>
+        <div class="bloat-scale">
+          <button class="bloat-btn" onclick="selectBloat(this,1)">1</button>
+          <button class="bloat-btn" onclick="selectBloat(this,2)">2</button>
+          <button class="bloat-btn" onclick="selectBloat(this,3)">3</button>
+          <button class="bloat-btn" onclick="selectBloat(this,4)">4</button>
+          <button class="bloat-btn" onclick="selectBloat(this,5)">5</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:3px;">
+          <span style="font-size:10px;color:#aaa;">none</span>
+          <span style="font-size:10px;color:#aaa;">severe</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Symptoms</span>
+        <div class="sym-grid">
+          <button class="sym-btn" onclick="toggleSym(this,'gas')">Gas</button>
+          <button class="sym-btn" onclick="toggleSym(this,'cramps')">Cramps</button>
+          <button class="sym-btn" onclick="toggleSym(this,'heaviness')">Heaviness</button>
+          <button class="sym-btn" onclick="toggleSym(this,'nausea')">Nausea</button>
+          <button class="sym-btn" onclick="toggleSym(this,'reflux')">Reflux</button>
+          <button class="sym-btn" onclick="toggleSym(this,'low energy')">Low energy</button>
+          <button class="sym-btn" onclick="toggleSym(this,'energy crash')">Energy crash</button>
+          <button class="sym-btn" onclick="toggleSym(this,'weakness')">Weakness</button>
+          <button class="sym-btn" onclick="toggleSym(this,'migraine')">Migraine</button>
+          <button class="sym-btn" onclick="toggleSym(this,'other')">Other</button>
+        </div>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Notes</span>
+        <textarea id="sym-notes" rows="2" placeholder="How are you feeling?"></textarea>
+      </div>
+    </div>
+    <button class="btn-primary" id="sym-btn" onclick="saveSymptoms()">Save symptoms</button>
+    <div class="status-msg" id="sym-status"></div>
+  </div>
+
+  <!-- HISTORY -->
+  <div id="section-history" class="section">
+    <div class="card">
+      <div class="section-title">Today · recomp targets</div>
+      <div class="remaining-grid">
+        <div class="rem-card"><div class="rem-val" id="rem-cal">-</div><div class="rem-lbl">kcal left</div></div>
+        <div class="rem-card"><div class="rem-val" id="rem-pro">-</div><div class="rem-lbl">protein left</div></div>
+        <div class="rem-card"><div class="rem-val" id="rem-carb">-</div><div class="rem-lbl">carbs left</div></div>
+        <div class="rem-card"><div class="rem-val" id="rem-fat">-</div><div class="rem-lbl">fat left</div></div>
+      </div>
+      <div style="margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin-bottom:3px;"><span>Calories</span><span id="bar-cal-txt"></span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="bar-cal" style="background:#1d9e75;width:0%"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#888;margin:6px 0 3px;"><span>Protein</span><span id="bar-pro-txt"></span></div>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="bar-pro" style="background:#378add;width:0%"></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Last 7 days · calorie target %</div>
+      <div class="week-bar-row" id="week-bars"></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:#888;margin-top:2px;" id="week-labels"></div>
+    </div>
+    <button class="btn-secondary" onclick="loadHistory()">Refresh</button>
+    <div id="history-list" style="margin-top:1rem;"></div>
+  </div>
+
+  <!-- WEIGHT -->
+  <div id="section-weight" class="section">
+    <div class="card">
+      <div class="section-title">Log weight</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px;">Morning weight is most accurate. Evening adds ~0.5–1.5kg from water and food.</div>
+      <div class="field-row">
+        <span class="field-label">Weight (kg)</span>
+        <input type="number" id="w-kg" step="0.1" placeholder="74.4">
+      </div>
+      <div class="field-row">
+        <span class="field-label">Time of day</span>
+        <select id="w-time-of-day">
+          <option value="morning">Morning (most accurate)</option>
+          <option value="midday">Midday</option>
+          <option value="evening" selected>Evening</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <span class="field-label">Date</span>
+        <input type="date" id="w-date">
+      </div>
+      <div class="field-row">
+        <span class="field-label">Notes</span>
+        <input type="text" id="w-notes" placeholder="e.g. after training, high sodium day">
+      </div>
+      <button class="btn-primary" onclick="saveWeight()">Save weight</button>
+      <div class="status-msg" id="w-status"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Weight log</div>
+      <div id="weight-list"><div style="font-size:13px;color:#888;">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="section-settings" class="section">
+    <div class="card">
+      <div class="section-title">API keys</div>
+      <div class="field-row">
+        <span class="field-label">Claude API key</span>
+        <input type="password" id="cfg-claude" placeholder="sk-ant-api03-...">
+      </div>
+      <div class="field-row">
+        <span class="field-label">Google Apps Script URL</span>
+        <input type="text" id="cfg-sheet" placeholder="https://script.google.com/...">
+      </div>
+      <div class="section-title" style="margin-top:1.25rem;">Daily targets · recomp</div>
+      <div class="macro-grid">
+        <div class="macro-card"><div class="macro-val">2100</div><div class="macro-lbl">kcal</div></div>
+        <div class="macro-card"><div class="macro-val">160g</div><div class="macro-lbl">protein</div></div>
+        <div class="macro-card"><div class="macro-val">190g</div><div class="macro-lbl">carbs</div></div>
+        <div class="macro-card"><div class="macro-val">65g</div><div class="macro-lbl">fat</div></div>
+      </div>
+      <div style="font-size:11px;color:#aaa;margin-top:8px;">Male · 173cm · 74.4kg · 33yo · lightly active · recomp</div>
+      <button class="btn-primary" onclick="saveConfig()" style="margin-top:1rem;">Save settings</button>
+      <div class="status-msg" id="cfg-status"></div>
+    </div>
+    <div class="card">
+      <div class="section-title">Add to home screen</div>
+      <div style="font-size:13px;color:#555;line-height:1.6;">
+        <strong>iPhone:</strong> Tap the Share button in Safari → "Add to Home Screen"<br><br>
+        <strong>Android:</strong> Tap the menu (⋮) in Chrome → "Add to Home Screen"
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const GOALS = { cal:2100, pro:160, carb:190, fat:65 };
+  let state = { mood:'', bloatScore:0, symTypes:[], photoBase64:'', aiData:null, meals:[], timeUserEdited:false };
+
+  function getConfig() {
+    return { claudeKey: localStorage.getItem('claude_key')||'', sheetUrl: localStorage.getItem('sheet_url')||'' };
+  }
+  function saveConfig() {
+    localStorage.setItem('claude_key', document.getElementById('cfg-claude').value.trim());
+    localStorage.setItem('sheet_url', document.getElementById('cfg-sheet').value.trim());
+    showStatus('cfg-status','Saved!',true);
+  }
+
+  function stampNow() {
+    const now = new Date();
+    document.getElementById('meal-date').value = now.toISOString().slice(0,10);
+    document.getElementById('meal-time').value = now.toTimeString().slice(0,5);
+    state.timeUserEdited = false;
+    document.getElementById('auto-tag').style.display = 'inline';
+    document.getElementById('time-hint').textContent = 'Captured at ' + now.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) + ' · Edit freely.';
+  }
+  function markUserEdited() {
+    state.timeUserEdited = true;
+    document.getElementById('auto-tag').style.display = 'none';
+    document.getElementById('time-hint').textContent = 'Manually set.';
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const now = new Date();
+    document.getElementById('today-date').textContent = now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    stampNow();
+    document.getElementById('sym-date').value = now.toISOString().slice(0,10);
+    document.getElementById('sym-time').value = now.toTimeString().slice(0,5);
+    document.getElementById('w-date').value = now.toISOString().slice(0,10);
+    const cfg = getConfig();
+    if (cfg.claudeKey) document.getElementById('cfg-claude').value = cfg.claudeKey;
+    if (cfg.sheetUrl) document.getElementById('cfg-sheet').value = cfg.sheetUrl;
+    loadHistory();
+  });
+
+  function showSection(name) {
+    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.getElementById('section-'+name).classList.add('active');
+    if (name==='symptoms') loadMealsForSelect();
+    if (name==='history') loadHistory();
+    if (name==='weight') loadWeightLog();
+  }
+
+  function selectMood(btn,val) {
+    document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected'); state.mood=val;
+  }
+  function selectBloat(btn,val) {
+    document.querySelectorAll('.bloat-btn').forEach(b=>b.classList.remove('selected'));
+    btn.classList.add('selected'); state.bloatScore=val;
+  }
+  function toggleSym(btn,val) {
+    btn.classList.toggle('selected');
+    if (state.symTypes.includes(val)) state.symTypes=state.symTypes.filter(s=>s!==val);
+    else state.symTypes.push(val);
+  }
+
+  function handlePhoto(input) {
+    const file = input.files[0]; if (!file) return;
+    if (!state.timeUserEdited) stampNow();
+    const reader = new FileReader();
+    reader.onload = e => {
+      state.photoBase64 = e.target.result.split(',')[1];
+      const p = document.getElementById('photo-preview');
+      p.src = e.target.result; p.style.display='block';
+      document.getElementById('upload-icon').textContent='';
+      document.getElementById('upload-label').textContent='Photo added · tap to replace';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeWithClaude() {
+    const cfg = getConfig();
+    if (!cfg.claudeKey) { alert('Add your Claude API key in Settings first.'); return; }
+    const ingredients = document.getElementById('ingredients').value.trim();
+    const hasPhoto = !!state.photoBase64;
+    if (!hasPhoto && !ingredients) { alert('Add a photo and/or enter your ingredients first.'); return; }
+
+    const btn = document.getElementById('analyze-btn');
+    btn.disabled=true; btn.textContent='Analyzing...';
+
+    try {
+      const prompt = `You are a precise nutrition calculator.
+${ingredients ? `Ingredients provided: "${ingredients}"` : ''}
+${hasPhoto ? 'A meal photo is attached.' : ''}
+${ingredients && hasPhoto ? 'Use the ingredients list as PRIMARY source. Use photo only to confirm portion size or spot unlisted items.' : ''}
+${!ingredients && hasPhoto ? 'Estimate macros from the photo. Confidence will be lower without ingredient weights.' : ''}
+Respond ONLY with valid JSON, no markdown:
+{"meal_name":"...","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"high|medium|low","notes":"brief explanation"}`;
+
+      const content = [];
+      if (hasPhoto) content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:state.photoBase64}});
+      content.push({type:'text',text:prompt});
+
+      const resp = await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':cfg.claudeKey,'anthropic-version':'2023-06-01'},
+        body: JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content}]})
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message);
+      const parsed = JSON.parse(data.content[0].text.replace(/```json|```/g,'').trim());
+      state.aiData = parsed;
+      document.getElementById('ai-meal-name').textContent = parsed.meal_name;
+      document.getElementById('ai-cal').textContent = Math.round(parsed.calories);
+      document.getElementById('ai-pro').textContent = Math.round(parsed.protein_g)+'g';
+      document.getElementById('ai-carb').textContent = Math.round(parsed.carbs_g)+'g';
+      document.getElementById('ai-fat').textContent = Math.round(parsed.fat_g)+'g';
+      const confColor = parsed.confidence==='high'?'#1d9e75':parsed.confidence==='medium'?'#ba7517':'#a32d2d';
+      document.getElementById('ai-confidence').innerHTML = `<span style="color:${confColor};font-weight:500;">${parsed.confidence} confidence</span>`;
+      document.getElementById('ai-notes').textContent = parsed.notes||'';
+      document.getElementById('ai-result').style.display='block';
+      if (!document.getElementById('meal-name').value) document.getElementById('meal-name').value = parsed.meal_name;
+      btn.textContent='Re-analyze'; btn.disabled=false;
+    } catch(err) {
+      btn.textContent='Analyze with Claude'; btn.disabled=false;
+      alert('Analysis failed: '+err.message);
+    }
+  }
+
+  async function saveMeal() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) { alert('Add your Google Apps Script URL in Settings first.'); return; }
+    const btn = document.getElementById('save-btn');
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving...';
+    const dateVal = document.getElementById('meal-date').value;
+    const timeVal = document.getElementById('meal-time').value;
+    const timestamp = dateVal&&timeVal ? new Date(dateVal+'T'+timeVal).toISOString() : new Date().toISOString();
+    const payload = {
+      action:'add_meal', timestamp,
+      meal_name: document.getElementById('meal-name').value||(state.aiData?state.aiData.meal_name:'Meal'),
+      calories: state.aiData?state.aiData.calories:'',
+      protein: state.aiData?state.aiData.protein_g:'',
+      carbs: state.aiData?state.aiData.carbs_g:'',
+      fat: state.aiData?state.aiData.fat_g:'',
+      mood: state.mood,
+      ingredients: document.getElementById('ingredients').value,
+      notes: document.getElementById('meal-notes').value,
+      photo_base64:''
+    };
+    try {
+      const res = await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
+      const json = await res.json();
+      if (json.success) { showStatus('log-status','Meal saved!',true); resetLogForm(); loadHistory(); }
+      else showStatus('log-status','Error: '+(json.error||'unknown'),false);
+    } catch(e) { showStatus('log-status','Failed: '+e.message,false); }
+    btn.disabled=false; btn.textContent='Save meal';
+  }
+
+  async function loadMealsForSelect() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) return;
+    const sel = document.getElementById('sym-meal-select');
+    sel.innerHTML='<option value="">Loading...</option>';
+    const now = new Date();
+    document.getElementById('sym-date').value = now.toISOString().slice(0,10);
+    document.getElementById('sym-time').value = now.toTimeString().slice(0,5);
+    try {
+      const res = await fetch(cfg.sheetUrl+'?t='+Date.now());
+      const json = await res.json();
+      if (!json.success||!json.meals.length) { sel.innerHTML='<option value="">No meals found</option>'; return; }
+      sel.innerHTML = [...json.meals].reverse().slice(0,20).map((m,i)=>{
+        const d = new Date(m['Timestamp']);
+        const label = (m['Meal Name']||'Meal')+' · '+(isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+        return `<option value="${m['ID']}" ${i===0?'selected':''}>${label}</option>`;
+      }).join('');
+    } catch(e) { sel.innerHTML='<option value="">Error loading</option>'; }
+  }
+
+  async function saveSymptoms() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) { alert('Add your Google Apps Script URL in Settings first.'); return; }
+    const id = document.getElementById('sym-meal-select').value;
+    if (!id) { alert('Select a meal first.'); return; }
+    if (!state.bloatScore && state.symTypes.length===0) { alert('Add at least a bloating score or symptom.'); return; }
+    const btn = document.getElementById('sym-btn');
+    btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving...';
+    const symDate = document.getElementById('sym-date').value;
+    const symTime = document.getElementById('sym-time').value;
+    const symTimestamp = symDate&&symTime ? new Date(symDate+'T'+symTime).toISOString() : new Date().toISOString();
+    const payload = { action:'add_symptoms', id, symptom_score:state.bloatScore, symptom_type:state.symTypes.join(', '), symptom_time:symTimestamp, symptom_notes:document.getElementById('sym-notes').value };
+    try {
+      const res = await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
+      const json = await res.json();
+      if (json.success) {
+        showStatus('sym-status','Symptoms saved!',true);
+        state.bloatScore=0; state.symTypes=[];
+        document.querySelectorAll('.bloat-btn,.sym-btn').forEach(b=>b.classList.remove('selected'));
+        loadHistory();
+      } else showStatus('sym-status','Error: '+(json.error||'unknown'),false);
+    } catch(e) { showStatus('sym-status','Failed: '+e.message,false); }
+    btn.disabled=false; btn.textContent='Save symptoms';
+  }
+
+  async function loadHistory() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) return;
+    const list = document.getElementById('history-list');
+    list.innerHTML='<div style="color:#888;font-size:13px;padding:.5rem 0;">Loading...</div>';
+    try {
+      const res = await fetch(cfg.sheetUrl+'?t='+Date.now());
+      const json = await res.json();
+      if (!json.success) { list.innerHTML='<div style="font-size:13px;color:#888;">Could not load.</div>'; return; }
+      state.meals = json.meals||[];
+      const today = new Date().toDateString();
+      const todayMeals = state.meals.filter(m=>new Date(m['Timestamp']).toDateString()===today);
+      let tCal=0,tPro=0,tCarb=0,tFat=0;
+      todayMeals.forEach(m=>{ tCal+=parseFloat(m['Calories'])||0; tPro+=parseFloat(m['Protein (g)'])||0; tCarb+=parseFloat(m['Carbs (g)'])||0; tFat+=parseFloat(m['Fat (g)'])||0; });
+      document.getElementById('rem-cal').textContent = Math.max(0,GOALS.cal-Math.round(tCal));
+      document.getElementById('rem-pro').textContent = Math.max(0,GOALS.pro-Math.round(tPro))+'g';
+      document.getElementById('rem-carb').textContent = Math.max(0,GOALS.carb-Math.round(tCarb))+'g';
+      document.getElementById('rem-fat').textContent = Math.max(0,GOALS.fat-Math.round(tFat))+'g';
+      document.getElementById('bar-cal').style.width = Math.min(100,Math.round(tCal/GOALS.cal*100))+'%';
+      document.getElementById('bar-pro').style.width = Math.min(100,Math.round(tPro/GOALS.pro*100))+'%';
+      document.getElementById('bar-cal-txt').textContent = Math.round(tCal)+' / '+GOALS.cal+' kcal';
+      document.getElementById('bar-pro-txt').textContent = Math.round(tPro)+' / '+GOALS.pro+'g';
+
+      const now = new Date();
+      const weekData = [];
+      for(let i=6;i>=0;i--) {
+        const d=new Date(now); d.setDate(now.getDate()-i);
+        const cal=state.meals.filter(m=>new Date(m['Timestamp']).toDateString()===d.toDateString()).reduce((s,m)=>s+(parseFloat(m['Calories'])||0),0);
+        const pct=Math.min(140,Math.round(cal/GOALS.cal*100));
+        weekData.push({label:d.toLocaleDateString('en-GB',{weekday:'short'}),pct});
+      }
+      const maxPct = Math.max(...weekData.map(d=>d.pct),10);
+      document.getElementById('week-bars').innerHTML = weekData.map(d=>{
+        const h=Math.round((d.pct/maxPct)*64);
+        const color=d.pct>=85&&d.pct<=115?'#1d9e75':d.pct<85?'#ccc':'#d85a30';
+        return `<div class="wbar-wrap"><div style="font-size:9px;color:#aaa;">${d.pct?d.pct+'%':''}</div><div class="wbar" style="height:${Math.max(h,3)}px;background:${color}"></div></div>`;
+      }).join('');
+      document.getElementById('week-labels').innerHTML = weekData.map(d=>`<span>${d.label}</span>`).join('');
+
+      if (!state.meals.length) { list.innerHTML='<div style="font-size:13px;color:#888;text-align:center;padding:1rem 0;">No meals logged yet.</div>'; return; }
+      list.innerHTML = `<div class="section-title" style="margin-bottom:8px;">Meal log</div>`+[...state.meals].reverse().map(m=>{
+        const d=new Date(m['Timestamp']);
+        const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const dateStr=isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+        const hasSym=m['Symptom Score']||m['Symptom Type'];
+        const symBadge=hasSym?`<span class="pill pill-red">Bloat ${m['Symptom Score']}/5${m['Symptom Type']?' · '+m['Symptom Type']:''}</span>`:`<span class="pill">No symptoms</span>`;
+        const ingBadge=m['Ingredients']?`<span class="pill pill-blue">ingredients logged</span>`:'';
+        const symTime=m['Symptom Time']?`<div style="font-size:11px;color:#aaa;margin-top:4px;">Symptoms at ${new Date(m['Symptom Time']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`:'';
+        return `<div class="meal-item">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px;">
+            <span style="font-size:14px;font-weight:500;">${m['Meal Name']||'Untitled'}</span>
+            <span style="font-size:11px;color:#888;">${timeStr} · ${dateStr}</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:5px;">
+            ${m['Calories']?`<span class="pill">${Math.round(m['Calories'])} kcal</span>`:''}
+            ${m['Protein (g)']?`<span class="pill">P ${Math.round(m['Protein (g)'])}g</span>`:''}
+            ${m['Carbs (g)']?`<span class="pill">C ${Math.round(m['Carbs (g)'])}g</span>`:''}
+            ${m['Fat (g)']?`<span class="pill">F ${Math.round(m['Fat (g)'])}g</span>`:''}
+            ${m['Mood']?`<span class="pill">${m['Mood']}</span>`:''}
+            ${ingBadge}
+          </div>
+          ${symBadge}${symTime}
+        </div>`;
+      }).join('');
+    } catch(e) { list.innerHTML=`<div style="font-size:13px;color:#888;">Failed: ${e.message}</div>`; }
+  }
+
+  async function saveWeight() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) { alert('Add your Google Apps Script URL in Settings first.'); return; }
+    const kg = parseFloat(document.getElementById('w-kg').value);
+    if (!kg) { alert('Enter a weight value.'); return; }
+    const payload = { action:'add_weight', timestamp:new Date(document.getElementById('w-date').value).toISOString(), weight_kg:kg, time_of_day:document.getElementById('w-time-of-day').value, notes:document.getElementById('w-notes').value };
+    try {
+      const res = await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
+      const json = await res.json();
+      if (json.success) { showStatus('w-status','Weight saved!',true); loadWeightLog(); document.getElementById('w-kg').value=''; document.getElementById('w-notes').value=''; }
+      else showStatus('w-status','Error: '+(json.error||'unknown'),false);
+    } catch(e) { showStatus('w-status','Failed: '+e.message,false); }
+  }
+
+  async function loadWeightLog() {
+    const cfg = getConfig();
+    if (!cfg.sheetUrl) return;
+    const el = document.getElementById('weight-list');
+    try {
+      const res = await fetch(cfg.sheetUrl+'?sheet=weight&t='+Date.now());
+      const json = await res.json();
+      const entries=(json.weights||[]).slice().reverse().slice(0,14);
+      if (!entries.length) { el.innerHTML='<div style="font-size:13px;color:#888;">No weight logged yet.</div>'; return; }
+      el.innerHTML=entries.map(w=>{
+        const d=new Date(w['Timestamp']);
+        const dateStr=isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+        const tag=w['Time of day']==='morning'?'<span class="pill pill-green">morning</span>':w['Time of day']==='evening'?'<span class="pill">evening</span>':'<span class="pill">midday</span>';
+        return `<div class="weight-item"><span style="font-weight:500;">${w['Weight (kg)']} kg</span> ${tag}<span style="color:#888;font-size:12px;">${dateStr}${w['Notes']?' · '+w['Notes']:''}</span></div>`;
+      }).join('');
+    } catch(e) { el.innerHTML=`<div style="font-size:13px;color:#888;">${e.message}</div>`; }
+  }
+
+  function resetLogForm() {
+    ['meal-name','meal-notes','ingredients'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('photo-preview').style.display='none';
+    document.getElementById('ai-result').style.display='none';
+    document.getElementById('analyze-btn').disabled=false;
+    document.getElementById('analyze-btn').textContent='Analyze with Claude';
+    document.getElementById('upload-icon').textContent='+';
+    document.getElementById('upload-icon').style.color='#aaa';
+    document.getElementById('upload-label').textContent='Tap to add photo';
+    document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));
+    state.mood=''; state.photoBase64=''; state.aiData=null; state.timeUserEdited=false;
+    stampNow();
+  }
+
+  function showStatus(id,msg,ok) {
+    const el=document.getElementById(id);
+    el.textContent=msg; el.className='status-msg '+(ok?'status-ok':'status-err');
+    el.style.display='block'; setTimeout(()=>el.style.display='none',3500);
+  }
+</script>
+</body>
+</html>
