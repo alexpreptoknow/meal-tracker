@@ -1153,8 +1153,22 @@ function resetLogForm(){
 // ── UTILS ─────────────────────────────────────────────────────────────────────
 function showStatus(id,msg,ok){
   const el=document.getElementById(id);
-  el.textContent=msg; el.className='status-msg '+(ok?'status-ok':'status-err');
-  el.style.display='block'; setTimeout(()=>el.style.display='none',3500);
+  el.className='status-msg '+(ok?'status-ok':'status-err');
+  el.style.display='block';
+
+  if(ok){
+    // success — auto-dismiss after 3.5s
+    el.innerHTML=msg;
+    setTimeout(()=>el.style.display='none',3500);
+  } else {
+    // error — persist with a dismiss button
+    el.innerHTML=`<div>${msg}</div>
+      <button onclick="this.parentElement.style.display='none'"
+        style="margin-top:6px;padding:4px 12px;border:1px solid currentColor;
+        background:transparent;border-radius:6px;color:inherit;font-size:12px;cursor:pointer;">
+        Dismiss
+      </button>`;
+  }
 }
 </script>
 </body>
