@@ -366,21 +366,34 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
     <div class="card">
       <div class="field-row">
-        <div class="field-label">Bristol stool type <span class="hint">— tap to select</span></div>
-        <div class="bristol-row" id="bristol-row">
-          <button class="bristol-btn sel-orange" onclick="selectBristol(this,1)"><div class="bnum">1</div><div class="bdesc">Hard lumps</div></button>
-          <button class="bristol-btn sel-orange" onclick="selectBristol(this,2)"><div class="bnum">2</div><div class="bdesc">Lumpy sausage</div></button>
-          <button class="bristol-btn sel-green" onclick="selectBristol(this,3)"><div class="bnum">3</div><div class="bdesc">Cracked</div></button>
-          <button class="bristol-btn sel-green" onclick="selectBristol(this,4)"><div class="bnum">4</div><div class="bdesc">Smooth ✓</div></button>
-          <button class="bristol-btn sel-green" onclick="selectBristol(this,5)"><div class="bnum">5</div><div class="bdesc">Soft blobs</div></button>
-          <button class="bristol-btn sel-orange" onclick="selectBristol(this,6)"><div class="bnum">6</div><div class="bdesc">Fluffy</div></button>
-          <button class="bristol-btn sel-orange" onclick="selectBristol(this,7)"><div class="bnum">7</div><div class="bdesc">Watery</div></button>
+        <div class="field-label">Morning bowel movement?</div>
+        <div class="scale-row">
+          <button class="scale-btn" id="bowel-notyet"  onclick="selectBowelState('notyet')">Not yet</button>
+          <button class="scale-btn" id="bowel-yes"     onclick="selectBowelState('yes')">Yes</button>
+          <button class="scale-btn" id="bowel-none"    onclick="selectBowelState('none')">No movement</button>
         </div>
-        <div style="font-size:11px;color:var(--tx3);margin-top:6px;">Types 3–5 are normal. 1–2 constipation. 6–7 loose.</div>
+        <div style="font-size:11px;color:var(--tx3);margin-top:5px;">
+          "No movement" is recorded — constipation patterns matter.
+        </div>
       </div>
-      <div class="field-row">
-        <div class="field-label">Stool notes <span class="hint">— optional</span></div>
-        <input type="text" id="m-stool-notes" placeholder="e.g. urgency, incomplete, colour change...">
+      <div id="bristol-section" style="display:none;">
+        <div class="field-row">
+          <div class="field-label">Bristol stool type</div>
+          <div class="bristol-row" id="bristol-row">
+            <button class="bristol-btn sel-orange" onclick="selectBristol(this,1)"><div class="bnum">1</div><div class="bdesc">Hard lumps</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectBristol(this,2)"><div class="bnum">2</div><div class="bdesc">Lumpy sausage</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectBristol(this,3)"><div class="bnum">3</div><div class="bdesc">Cracked</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectBristol(this,4)"><div class="bnum">4</div><div class="bdesc">Smooth ✓</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectBristol(this,5)"><div class="bnum">5</div><div class="bdesc">Soft blobs</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectBristol(this,6)"><div class="bnum">6</div><div class="bdesc">Fluffy</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectBristol(this,7)"><div class="bnum">7</div><div class="bdesc">Watery</div></button>
+          </div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:6px;">Types 3–5 normal · 1–2 constipation · 6–7 loose</div>
+        </div>
+        <div class="field-row">
+          <div class="field-label">Stool notes <span class="hint">— optional</span></div>
+          <input type="text" id="m-stool-notes" placeholder="e.g. urgency, incomplete, colour change...">
+        </div>
       </div>
     </div>
 
@@ -463,6 +476,31 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
           <button class="sym-btn" onclick="toggleSym(this,'weakness')">Weakness</button>
           <button class="sym-btn" onclick="toggleSym(this,'migraine')">Migraine</button>
           <button class="sym-btn" onclick="toggleSym(this,'other')">Other</button>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-label">Bowel movement with this meal?</div>
+        <div class="scale-row">
+          <button class="scale-btn" id="sym-bowel-no"  onclick="selectSymBowel('no')">No</button>
+          <button class="scale-btn" id="sym-bowel-yes" onclick="selectSymBowel('yes')">Yes</button>
+        </div>
+      </div>
+      <div id="sym-bristol-section" style="display:none;">
+        <div class="field-row">
+          <div class="field-label">Bristol stool type</div>
+          <div class="bristol-row" id="sym-bristol-row">
+            <button class="bristol-btn sel-orange" onclick="selectSymBristol(this,1)"><div class="bnum">1</div><div class="bdesc">Hard lumps</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectSymBristol(this,2)"><div class="bnum">2</div><div class="bdesc">Lumpy sausage</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectSymBristol(this,3)"><div class="bnum">3</div><div class="bdesc">Cracked</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectSymBristol(this,4)"><div class="bnum">4</div><div class="bdesc">Smooth ✓</div></button>
+            <button class="bristol-btn sel-green"  onclick="selectSymBristol(this,5)"><div class="bnum">5</div><div class="bdesc">Soft blobs</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectSymBristol(this,6)"><div class="bnum">6</div><div class="bdesc">Fluffy</div></button>
+            <button class="bristol-btn sel-orange" onclick="selectSymBristol(this,7)"><div class="bnum">7</div><div class="bdesc">Watery</div></button>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-label">Stool notes <span class="hint">— optional</span></div>
+          <input type="text" id="sym-stool-notes" placeholder="e.g. urgency, colour change...">
         </div>
       </div>
       <div class="field-row">
@@ -601,7 +639,8 @@ let state = {
   mood:'', bloatScore:0, symTypes:[],
   photoBase64:'', aiData:null, meals:[],
   timeUserEdited:false,
-  morning:{ overall:0, energy:0, mbloat:0, sleepq:0, bristol:0, sleepH:0, sleepM:0 }
+  symBowel:'no', symBristol:null,
+  morning:{ overall:0, energy:0, mbloat:0, sleepq:0, bristol:0, sleepH:0, sleepM:0, bowelState:'notyet' }
 };
 
 // ── CONFIG ───────────────────────────────────────────────────────────────────
@@ -673,8 +712,12 @@ async function checkMorningBanner(){
   try{
     const res=await fetch(cfg.sheetUrl+'?sheet=morning&t='+Date.now());
     const json=await res.json();
-    const today=new Date().toDateString();
-    const todayLog=(json.morning||[]).find(m=>new Date(m['Timestamp']).toDateString()===today);
+    // Use local_date if available, fall back to timestamp comparison
+    const todayLocal=new Date().toISOString().slice(0,10);
+    const todayLog=(json.morning||[]).find(m=>
+      (m['Local date']&&m['Local date'].toString().slice(0,10)===todayLocal) ||
+      new Date(m['Timestamp']).toDateString()===new Date().toDateString()
+    );
     if(todayLog){
       document.getElementById('banner-text').textContent='✅ Morning check-in done';
       document.getElementById('banner-sub').textContent='Logged at '+new Date(todayLog['Timestamp']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -707,6 +750,50 @@ function selectBristol(btn,val){
   state.morning.bristol=val;
 }
 
+function selectBowelState(val){
+  // Update button styles
+  ['notyet','yes','none'].forEach(s=>{
+    document.getElementById('bowel-'+s).classList.remove('selected');
+  });
+  document.getElementById('bowel-'+val).classList.add('selected');
+  state.morning.bowelState = val;
+  // Show/hide Bristol selector
+  document.getElementById('bristol-section').style.display = val==='yes' ? 'block' : 'none';
+  // If no movement, clear any Bristol selection
+  if(val !== 'yes'){
+    state.morning.bristol = val==='none' ? 0 : null;
+    document.querySelectorAll('#bristol-row .bristol-btn').forEach(b=>{
+      b.style.border='0.5px solid var(--bd)';
+      b.style.background='var(--bg2)';
+      b.querySelector('.bnum').style.color='var(--tx)';
+      b.querySelector('.bdesc').style.color='var(--tx3)';
+    });
+  }
+}
+
+function selectSymBowel(val){
+  document.getElementById('sym-bowel-no').classList.remove('selected');
+  document.getElementById('sym-bowel-yes').classList.remove('selected');
+  document.getElementById('sym-bowel-'+val).classList.add('selected');
+  state.symBowel = val;
+  document.getElementById('sym-bristol-section').style.display = val==='yes' ? 'block' : 'none';
+}
+
+function selectSymBristol(btn, val){
+  document.querySelectorAll('#sym-bristol-row .bristol-btn').forEach(b=>{
+    b.style.border='0.5px solid var(--bd)';
+    b.style.background='var(--bg2)';
+    b.querySelector('.bnum').style.color='var(--tx)';
+    b.querySelector('.bdesc').style.color='var(--tx3)';
+  });
+  const isGood=[3,4,5].includes(val);
+  btn.style.border='1.5px solid '+(isGood?'var(--green)':'var(--orange)');
+  btn.style.background=isGood?'var(--green-lt)':'var(--orange-lt)';
+  btn.querySelector('.bnum').style.color=isGood?'var(--green-tx)':'var(--orange-tx)';
+  btn.querySelector('.bdesc').style.color=isGood?'var(--green-tx)':'var(--orange-tx)';
+  state.symBristol = val;
+}
+
 function selectSleepH(btn,val){
   document.querySelectorAll('.sleep-h-btn').forEach(b=>b.classList.remove('selected'));
   btn.classList.add('selected');
@@ -733,9 +820,13 @@ async function loadPrevMeals(){
     const res=await fetch(cfg.sheetUrl+'?t='+Date.now());
     const json=await res.json();
     if(!json.success||!json.meals.length){ card.style.display='none'; return; }
+    // Use local_date for reliable day matching without timezone issues
     const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
-    const yStr=yesterday.toDateString();
-    const prevMeals=json.meals.filter(m=>new Date(m['Timestamp']).toDateString()===yStr);
+    const yLocal=yesterday.toISOString().slice(0,10);
+    const prevMeals=json.meals.filter(m=>
+      (m['Local date']&&m['Local date'].toString().slice(0,10)===yLocal) ||
+      new Date(m['Timestamp']).toDateString()===yesterday.toDateString()
+    );
     if(!prevMeals.length){ card.style.display='none'; return; }
     card.style.display='block';
     list.innerHTML=prevMeals.map(m=>{
@@ -757,11 +848,20 @@ async function loadPrevMeals(){
 
 async function saveMorning(){
   const m=state.morning;
+
+  // Validation — bowelState defaults to 'notyet' in state so check for empty string too
   if(!m.overall) { showStatus('morning-status','Please rate your overall feeling.',false); return; }
   if(!m.energy)  { showStatus('morning-status','Please rate your energy level.',false); return; }
   if(!m.mbloat)  { showStatus('morning-status','Please rate your morning bloating.',false); return; }
   if(!m.sleepq)  { showStatus('morning-status','Please rate your sleep quality.',false); return; }
-  if(!m.bristol) { showStatus('morning-status','Please select a Bristol stool type.',false); return; }
+  // bowelState must be explicitly chosen — 'notyet' is the default unselected state
+  if(!m.bowelState||m.bowelState==='notyet'){
+    showStatus('morning-status','Please select a bowel movement option.',false); return;
+  }
+  // If yes was selected, Bristol type must also be picked
+  if(m.bowelState==='yes'&&!m.bristol){
+    showStatus('morning-status','Please select a Bristol stool type.',false); return;
+  }
 
   const btn=document.getElementById('save-morning-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving...';
@@ -769,13 +869,15 @@ async function saveMorning(){
   const mDate=document.getElementById('m-date').value;
   const mTime=document.getElementById('m-time').value;
   const ts=toISO(mDate,mTime);
-  const sleepHours=m.sleepH?(m.sleepH+(m.sleepM/60)).toFixed(2):'';
 
+  // Sleep hours — keep as number not string, fixes 7.3 vs 7.25 bug
+  const sleepHours=m.sleepH?+(m.sleepH+(m.sleepM/60)).toFixed(2):'';
+
+  // Step 1 — save morning log
   const payload={
     action:'add_morning', timestamp:ts,
     overall:m.overall, energy:m.energy,
-    bloating:m.mbloat, bristol:m.bristol,
-    stool_notes:document.getElementById('m-stool-notes').value,
+    bloating:m.mbloat,
     sleep_quality:m.sleepq, sleep_hours:sleepHours,
     morning_notes:document.getElementById('m-notes').value,
     linked_meal_ids:m.linkedMealIds||''
@@ -784,26 +886,66 @@ async function saveMorning(){
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
     const json=await res.json();
-    if(json.success){
-      showStatus('morning-status','Morning check-in saved! ✓',true);
-      checkMorningBanner();
-      // reset
-      state.morning={ overall:0,energy:0,mbloat:0,sleepq:0,bristol:0,sleepH:0,sleepM:0 };
-      document.querySelectorAll('#section-morning .scale-btn').forEach(b=>b.classList.remove('selected'));
-      document.querySelectorAll('.bristol-btn').forEach(b=>{
-        b.style.border='0.5px solid var(--bd)';
-        b.style.background='var(--bg2)';
-        b.querySelector('.bnum').style.color='var(--tx)';
-        b.querySelector('.bdesc').style.color='var(--tx3)';
-      });
-      document.querySelectorAll('.sleep-h-btn,.sleep-m-btn').forEach(b=>b.classList.remove('selected'));
-      document.getElementById('sleep-display').textContent='';
-      document.getElementById('m-stool-notes').value='';
-      document.getElementById('m-notes').value='';
-    } else {
+    if(!json.success){
       showStatus('morning-status','Error: '+(json.error||'unknown'),false);
+      btn.disabled=false; btn.textContent='Save morning check-in';
+      return;
     }
+
+    // Step 2 — save bowel event separately
+    if(m.bowelState==='yes'){
+      await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify({
+        action:'add_bowel', timestamp:ts,
+        bristol:m.bristol,
+        is_first_of_day:true,
+        notes:document.getElementById('m-stool-notes').value||'',
+        source:'morning'
+      })});
+    } else if(m.bowelState==='none'){
+      await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify({
+        action:'add_bowel', timestamp:ts,
+        bristol:0,
+        is_first_of_day:true,
+        notes:'No bowel movement today',
+        source:'morning'
+      })});
+    }
+    // bowelState==='notyet' — nothing saved, user logs later via symptoms tab
+
+    showStatus('morning-status','Morning check-in saved! ✓',true);
+    checkMorningBanner();
+
+    // Reset all morning state
+    state.morning={
+      overall:0, energy:0, mbloat:0, sleepq:0,
+      bristol:0, sleepH:0, sleepM:0,
+      bowelState:'notyet', // back to default unselected
+      linkedMealIds:''
+    };
+
+    // Reset all UI
+    document.querySelectorAll('#section-morning .scale-btn').forEach(b=>b.classList.remove('selected'));
+    document.querySelectorAll('#bristol-row .bristol-btn').forEach(b=>{
+      // Use #bristol-row not .bristol-btn globally — avoids touching symptom Bristol buttons
+      b.style.border='0.5px solid var(--bd)';
+      b.style.background='var(--bg2)';
+      b.querySelector('.bnum').style.color='var(--tx)';
+      b.querySelector('.bdesc').style.color='var(--tx3)';
+    });
+    document.querySelectorAll('.sleep-h-btn,.sleep-m-btn').forEach(b=>b.classList.remove('selected'));
+    // Reset bowel state buttons — use id not class
+    ['notyet','yes','none'].forEach(s=>{
+      const el=document.getElementById('bowel-'+s);
+      if(el) el.classList.remove('selected');
+    });
+    document.getElementById('sleep-display').textContent='';
+    document.getElementById('m-stool-notes').value='';
+    document.getElementById('m-notes').value='';
+    document.getElementById('bristol-section').style.display='none';
+    // id is 'bristol-section' not 'morning-bristol-section'
+
   }catch(e){ showStatus('morning-status','Failed: '+e.message,false); }
+
   btn.disabled=false; btn.textContent='Save morning check-in';
 }
 
@@ -965,7 +1107,8 @@ async function saveMeal(){
     ingredients:document.getElementById('ingredients').value,
     notes:document.getElementById('meal-notes').value,
     irritants:state.aiData&&state.aiData.irritants?JSON.stringify(state.aiData.irritants):'',
-    photo_base64:''
+    photo_base64:'',
+    local_date:document.getElementById('meal-date').value
   };
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
@@ -1027,6 +1170,58 @@ async function saveSymptoms(){
     symptom_time:toISO(sd,st),
     symptom_notes:document.getElementById('sym-notes').value
   };
+  // Save bowel event if user indicated one
+  if(state.symBowel==='yes' && state.symBristol){
+    await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify({
+      action:'add_bowel',
+      timestamp:toISO(sd,st),
+      bristol:state.symBristol,
+      is_first_of_day:false,
+      linked_meal_id:id,
+      notes:document.getElementById('sym-stool-notes').value,
+      source:'symptom'
+    })});
+  }
+  try{
+    const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
+    const json=await res.json();
+    if(!json.success){
+      showStatus('sym-status','Error: '+(json.error||'unknown'),false);
+      btn.disabled=false; btn.textContent='Save symptoms';
+      return;
+    }
+
+    // Save bowel event if toggled
+    if(state.symBowel&&state.symBristol){
+      const bowelPayload={
+        action:'add_bowel',
+        timestamp:toISO(sd,st),
+        bristol:state.symBristol,
+        is_first_of_day:false,
+        linked_meal_id:id,
+        notes:document.getElementById('sym-bowel-notes').value,
+        source:'symptom'
+      };
+      await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(bowelPayload)});
+    }
+
+    showStatus('sym-status','Symptoms saved! ✓',true);
+    state.bloatScore=0; state.symTypes=[];
+    state.symBowel=false; state.symBristol=0;
+    document.querySelectorAll('.bloat-btn,.sym-btn').forEach(b=>b.classList.remove('selected'));
+    document.getElementById('sym-notes').value='';
+    // Reset bowel section
+    document.getElementById('sym-bowel-section').style.display='none';
+    document.querySelectorAll('.sym-bowel-toggle').forEach(b=>b.classList.remove('selected'));
+    document.querySelectorAll('.sym-bristol-btn').forEach(b=>{
+      b.style.border='0.5px solid var(--bd)';
+      b.style.background='var(--bg2)';
+    });
+    if(document.getElementById('sym-bowel-notes'))
+      document.getElementById('sym-bowel-notes').value='';
+
+  }catch(e){ showStatus('sym-status','Failed: '+e.message,false); }
+  btn.disabled=false; btn.textContent='Save symptoms';
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
     const json=await res.json();
@@ -1035,6 +1230,11 @@ async function saveSymptoms(){
       state.bloatScore=0; state.symTypes=[];
       document.querySelectorAll('.bloat-btn,.sym-btn').forEach(b=>b.classList.remove('selected'));
       document.getElementById('sym-notes').value='';
+      document.getElementById('sym-stool-notes').value='';
+      document.getElementById('sym-bristol-section').style.display='none';
+      document.getElementById('sym-bowel-no').classList.remove('selected');
+      document.getElementById('sym-bowel-yes').classList.remove('selected');
+      state.symBowel='no'; state.symBristol=null;
     }else showStatus('sym-status','Error: '+(json.error||'unknown'),false);
   }catch(e){ showStatus('sym-status','Failed: '+e.message,false); }
   btn.disabled=false; btn.textContent='Save symptoms';
@@ -1125,7 +1325,15 @@ async function saveWeight(){
   const kg=parseFloat(document.getElementById('w-kg').value);
   if(!kg){ alert('Enter a weight value.'); return; }
   const cfg=getConfig();
-  const payload={action:'add_weight',timestamp:toISO(document.getElementById('w-date').value,'12:00'),weight_kg:kg,time_of_day:document.getElementById('w-tod').value,notes:document.getElementById('w-notes').value};
+  const wDate=document.getElementById('w-date').value;
+  const payload={
+    action:'add_weight',
+    timestamp:toISO(wDate,'12:00'),
+    local_date:wDate,
+    weight_kg:kg,
+    time_of_day:document.getElementById('w-tod').value,
+    notes:document.getElementById('w-notes').value
+  };
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
     const json=await res.json();
