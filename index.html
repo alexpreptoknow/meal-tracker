@@ -581,6 +581,19 @@ const MACRO_LIMITS = {
 };
 const BRISTOL_COLORS = {1:'sel-orange',2:'sel-orange',3:'sel-green',4:'sel-green',5:'sel-green',6:'sel-orange',7:'sel-orange'};
 
+
+// ── DATE HELPERS ─────────────────────────────────────────────────────────────
+// Safely construct an ISO timestamp from separate date and time strings.
+// Uses explicit numeric constructor instead of new Date(string) because
+// iOS Safari is strict about date string formats and throws
+// "did not match expected pattern" on "YYYY-MM-DDTHH:MM" without seconds.
+function toISO(dateStr, timeStr){
+  if(!dateStr||!timeStr) return new Date().toISOString();
+  const [y,mo,d]=dateStr.split('-').map(Number);
+  const [h,mi]=timeStr.split(':').map(Number);
+  return new Date(y,mo-1,d,h,mi,0).toISOString();
+}
+  
 // ── STATE ────────────────────────────────────────────────────────────────────
 let state = {
   mood:'', bloatScore:0, symTypes:[],
@@ -753,7 +766,7 @@ async function saveMorning(){
   const cfg=getConfig();
   const mDate=document.getElementById('m-date').value;
   const mTime=document.getElementById('m-time').value;
-  const ts=mDate&&mTime?new Date(mDate+'T'+mTime).toISOString():new Date().toISOString();
+  const ts=toISO(mDate,mTime);
   const sleepHours=m.sleepH?(m.sleepH+(m.sleepM/60)).toFixed(2):'';
 
   const payload={
@@ -938,7 +951,7 @@ async function saveMeal(){
   const cfg=getConfig();
   const dv=document.getElementById('meal-date').value;
   const tv=document.getElementById('meal-time').value;
-  const ts=dv&&tv?new Date(dv+'T'+tv).toISOString():new Date().toISOString();
+  const ts=toISO(dv,tv);
   const payload={
     action:'add_meal', timestamp:ts,
     meal_name:document.getElementById('meal-name').value||(state.aiData?state.aiData.meal_name:'Meal'),
@@ -1009,7 +1022,7 @@ async function saveSymptoms(){
     action:'add_symptoms',id,
     symptom_score:state.bloatScore,
     symptom_type:state.symTypes.join(', '),
-    symptom_time:sd&&st?new Date(sd+'T'+st).toISOString():new Date().toISOString(),
+    symptom_time:toISO(sd,st),
     symptom_notes:document.getElementById('sym-notes').value
   };
   try{
@@ -1110,7 +1123,7 @@ async function saveWeight(){
   const kg=parseFloat(document.getElementById('w-kg').value);
   if(!kg){ alert('Enter a weight value.'); return; }
   const cfg=getConfig();
-  const payload={action:'add_weight',timestamp:new Date(document.getElementById('w-date').value+'T12:00').toISOString(),weight_kg:kg,time_of_day:document.getElementById('w-tod').value,notes:document.getElementById('w-notes').value};
+  const payload={action:'add_weight',timestamp:toISO(document.getElementById('w-date').value,'12:00'),weight_kg:kg,time_of_day:document.getElementById('w-tod').value,notes:document.getElementById('w-notes').value};
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
     const json=await res.json();
