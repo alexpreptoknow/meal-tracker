@@ -82,6 +82,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 /* PHOTO */
 .photo-upload{border:1.5px dashed var(--bd2);border-radius:var(--rl);padding:20px;text-align:center;cursor:pointer;background:var(--bg2);}
 .photo-preview{width:100%;border-radius:var(--r);margin-top:10px;display:none;max-height:220px;object-fit:cover;}
+.photo-preview-multi{width:30%;border-radius:var(--r);margin-top:10px;margin-right:4px;max-height:120px;object-fit:cover;}
 
 /* MOOD */
 .mood-row{display:flex;gap:6px;}
@@ -230,10 +231,10 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <div class="field-label">Photo <span class="hint">— optional</span></div>
         <div class="photo-upload" onclick="document.getElementById('photo-input').click()">
           <div id="upload-icon" style="font-size:28px;">📷</div>
-          <div id="upload-label" style="font-size:13px;color:var(--tx2);margin-top:4px;">Tap to add photo</div>
-          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="handlePhoto(this)">
+          <div id="upload-label" style="font-size:13px;color:var(--tx2);margin-top:4px;">Tap to add photos</div>
+          <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhoto(this)">
         </div>
-        <img id="photo-preview" class="photo-preview">
+        <div id="photo-preview-container"></div>
       </div>
       <div class="field-row">
         <div class="field-label">
@@ -637,7 +638,7 @@ function toISO(dateStr, timeStr){
 // ── STATE ────────────────────────────────────────────────────────────────────
 let state = {
   mood:'', bloatScore:0, symTypes:[],
-  photoBase64:'', aiData:null, meals:[],
+  photoBase64s:[], aiData:null, meals:[],
   timeUserEdited:false,
   symBowel:'no', symBristol:null,
   morning:{ overall:0, energy:0, mbloat:0, sleepq:0, bristol:0, sleepH:0, sleepM:0, bowelState:'notyet' }
@@ -1040,7 +1041,7 @@ async function analyzeWithClaude(){
   const cfg=getConfig();
   if(!cfg.claudeKey){ alert('Add your Claude API key in Settings first.'); return; }
   const ingredients=document.getElementById('ingredients').value.trim();
-  const hasPhoto=!!state.photoBase64;
+  const hasPhoto=state.photoBase64s&&state.photoBase64s.length>0;
   if(!hasPhoto&&!ingredients){ alert('Add a photo and/or enter ingredients first.'); return; }
 
   const btn=document.getElementById('analyze-btn');
@@ -1053,7 +1054,11 @@ async function analyzeWithClaude(){
     try{
       const prompt=buildPrompt(ingredients,hasPhoto,lastRaw,lastErrors);
       const content=[];
-      if(hasPhoto) content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:state.photoBase64}});
+      if(hasPhoto){
+        for(const b64 of state.photoBase64s){
+          content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}});
+        }
+      }
       content.push({type:'text',text:prompt});
       const rawText=await callClaude(cfg.claudeKey,content);
       lastRaw=rawText;
@@ -1082,17 +1087,36 @@ async function analyzeWithClaude(){
 
 // ── PHOTO ─────────────────────────────────────────────────────────────────────
 function handlePhoto(input){
-  const file=input.files[0]; if(!file) return;
+  const files=Array.from(input.files||[]);
+  if(!files.length) return;
   if(!state.timeUserEdited) stampNow();
-  const reader=new FileReader();
-  reader.onload=e=>{
-    state.photoBase64=e.target.result.split(',')[1];
-    const p=document.getElementById('photo-preview');
-    p.src=e.target.result; p.style.display='block';
-    document.getElementById('upload-icon').textContent='✅';
-    document.getElementById('upload-label').textContent='Photo added · tap to replace';
-  };
-  reader.readAsDataURL(file);
+
+  state.photoBase64s=[];
+  const container=document.getElementById('photo-preview-container');
+  container.innerHTML='';
+
+  let remaining=files.length;
+
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const dataUrl=e.target.result;
+      state.photoBase64s.push(dataUrl.split(',')[1]);
+
+      const img=document.createElement('img');
+      img.src=dataUrl;
+      img.className='photo-preview-multi';
+      container.appendChild(img);
+
+      remaining--;
+      if(remaining===0){
+        document.getElementById('upload-icon').textContent='✅';
+        document.getElementById('upload-label').textContent=
+          files.length===1?'1 photo added · tap to replace':files.length+' photos added · tap to replace';
+      }
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // ── SAVE MEAL ─────────────────────────────────────────────────────────────────
@@ -1369,14 +1393,15 @@ async function loadWeightLog(){
 // ── RESET ─────────────────────────────────────────────────────────────────────
 function resetLogForm(){
   ['meal-name','meal-notes','ingredients'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('photo-preview').style.display='none';
+  const pc=document.getElementById('photo-preview-container');
+  if(pc) pc.innerHTML='';
   document.getElementById('ai-result').style.display='none';
   document.getElementById('analyze-btn').disabled=false;
   document.getElementById('analyze-btn').textContent='Analyze with Claude';
   document.getElementById('upload-icon').textContent='📷';
-  document.getElementById('upload-label').textContent='Tap to add photo';
+  document.getElementById('upload-label').textContent='Tap to add photos';
   document.querySelectorAll('.mood-btn').forEach(b=>b.classList.remove('selected'));
-  state.mood=''; state.photoBase64=''; state.aiData=null; state.timeUserEdited=false;
+  state.mood=''; state.photoBase64s=[]; state.aiData=null; state.timeUserEdited=false;
   stampNow();
 }
 
