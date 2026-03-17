@@ -467,6 +467,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div class="field-row">
         <div class="field-label">Symptoms</div>
         <div class="sym-grid">
+          <button class="sym-btn" onclick="toggleSym(this,'no symptoms')">No symptoms</button>
           <button class="sym-btn" onclick="toggleSym(this,'gas')">Gas</button>
           <button class="sym-btn" onclick="toggleSym(this,'cramps')">Cramps</button>
           <button class="sym-btn" onclick="toggleSym(this,'heaviness')">Heaviness</button>
@@ -1181,8 +1182,27 @@ function selectBloat(btn,val){
   btn.classList.add('selected'); state.bloatScore=val;
 }
 function toggleSym(btn,val){
+  const isNoSym = val==='no symptoms';
+
+  // If "No symptoms" is chosen, clear all other symptom selections
+  if(isNoSym){
+    document.querySelectorAll('.sym-grid .sym-btn').forEach(b=>{
+      b.classList.remove('selected');
+    });
+    btn.classList.add('selected');
+    state.symTypes=['no symptoms'];
+    return;
+  }
+
+  // If any other symptom is chosen, unselect "No symptoms"
+  document.querySelectorAll('.sym-grid .sym-btn').forEach(b=>{
+    if(b.textContent.trim()==='No symptoms') b.classList.remove('selected');
+  });
+
   btn.classList.toggle('selected');
-  state.symTypes=btn.classList.contains('selected')?[...state.symTypes,val]:state.symTypes.filter(s=>s!==val);
+  state.symTypes=btn.classList.contains('selected')
+    ?[...state.symTypes.filter(s=>s!=='no symptoms'),val]
+    :state.symTypes.filter(s=>s!==val);
 }
 
 async function saveSymptoms(){
@@ -1201,18 +1221,6 @@ async function saveSymptoms(){
     symptom_time:toISO(sd,st),
     symptom_notes:document.getElementById('sym-notes').value
   };
-  // Save bowel event if user indicated one
-  if(state.symBowel==='yes' && state.symBristol){
-    await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify({
-      action:'add_bowel',
-      timestamp:toISO(sd,st),
-      bristol:state.symBristol,
-      is_first_of_day:false,
-      linked_meal_id:id,
-      notes:document.getElementById('sym-stool-notes').value,
-      source:'symptom'
-    })});
-  }
   try{
     const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
     const json=await res.json();
@@ -1222,51 +1230,43 @@ async function saveSymptoms(){
       return;
     }
 
-    // Save bowel event if toggled
-    if(state.symBowel&&state.symBristol){
+    // Save bowel event if toggled and valid
+    if(state.symBowel==='yes' && state.symBristol){
       const bowelPayload={
         action:'add_bowel',
         timestamp:toISO(sd,st),
         bristol:state.symBristol,
         is_first_of_day:false,
         linked_meal_id:id,
-        notes:document.getElementById('sym-bowel-notes').value,
+        notes:document.getElementById('sym-stool-notes').value||'',
         source:'symptom'
       };
       await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(bowelPayload)});
     }
 
     showStatus('sym-status','Symptoms saved! ✓',true);
-    state.bloatScore=0; state.symTypes=[];
-    state.symBowel=false; state.symBristol=0;
+
+    // Reset symptom state
+    state.bloatScore=0;
+    state.symTypes=[];
+    state.symBowel='no';
+    state.symBristol=null;
+
+    // Reset UI selections
     document.querySelectorAll('.bloat-btn,.sym-btn').forEach(b=>b.classList.remove('selected'));
     document.getElementById('sym-notes').value='';
-    // Reset bowel section
-    document.getElementById('sym-bowel-section').style.display='none';
-    document.querySelectorAll('.sym-bowel-toggle').forEach(b=>b.classList.remove('selected'));
-    document.querySelectorAll('.sym-bristol-btn').forEach(b=>{
+    document.getElementById('sym-stool-notes').value='';
+    document.getElementById('sym-bristol-section').style.display='none';
+    document.getElementById('sym-bowel-no').classList.remove('selected');
+    document.getElementById('sym-bowel-yes').classList.remove('selected');
+    // Reset Bristol styling in symptoms section only
+    document.querySelectorAll('#sym-bristol-row .bristol-btn').forEach(b=>{
       b.style.border='0.5px solid var(--bd)';
       b.style.background='var(--bg2)';
+      b.querySelector('.bnum').style.color='var(--tx)';
+      b.querySelector('.bdesc').style.color='var(--tx3)';
     });
-    if(document.getElementById('sym-bowel-notes'))
-      document.getElementById('sym-bowel-notes').value='';
 
-  }catch(e){ showStatus('sym-status','Failed: '+e.message,false); }
-  btn.disabled=false; btn.textContent='Save symptoms';
-  try{
-    const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
-    const json=await res.json();
-    if(json.success){
-      showStatus('sym-status','Symptoms saved! ✓',true);
-      state.bloatScore=0; state.symTypes=[];
-      document.querySelectorAll('.bloat-btn,.sym-btn').forEach(b=>b.classList.remove('selected'));
-      document.getElementById('sym-notes').value='';
-      document.getElementById('sym-stool-notes').value='';
-      document.getElementById('sym-bristol-section').style.display='none';
-      document.getElementById('sym-bowel-no').classList.remove('selected');
-      document.getElementById('sym-bowel-yes').classList.remove('selected');
-      state.symBowel='no'; state.symBristol=null;
-    }else showStatus('sym-status','Error: '+(json.error||'unknown'),false);
   }catch(e){ showStatus('sym-status','Failed: '+e.message,false); }
   btn.disabled=false; btn.textContent='Save symptoms';
 }
