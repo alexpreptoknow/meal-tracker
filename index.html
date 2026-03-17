@@ -591,7 +591,9 @@ function toISO(dateStr, timeStr){
   if(!dateStr||!timeStr) return new Date().toISOString();
   const [y,mo,d]=dateStr.split('-').map(Number);
   const [h,mi]=timeStr.split(':').map(Number);
-  return new Date(y,mo-1,d,h,mi,0).toISOString();
+  // Use local time string instead of UTC ISO to preserve timezone
+  const pad=n=>String(n).padStart(2,'0');
+  return `${y}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:00`;
 }
   
 // ── STATE ────────────────────────────────────────────────────────────────────
