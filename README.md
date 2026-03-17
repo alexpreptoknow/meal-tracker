@@ -11,7 +11,9 @@ Runs entirely in the browser. Data lives in your own Google Sheet. No servers, n
 - **Meal logging** — photo + ingredient input, Claude AI auto-detects meal name, calories, macros and irritant categories
 - **Irritant tagging** — 14 categories including histamine, gluten, dairy, FODMAPs, nightshades, oxalates, lectins, salicylates, sulphur, caffeine and more
 - **Symptom tracking** — bloating score, symptom types (gas, cramps, heaviness, nausea, reflux, low energy, energy crash, weakness, migraine), linked to the triggering meal with timestamp
-- **Morning check-in** — overall feeling, energy, bloating, sleep quality, Bristol stool type, hours slept — auto-linked to previous day's meals
+- **Morning check-in** — overall feeling, energy, bloating, sleep quality, hours slept — auto-linked to previous day's meals
+- **Bowel events log** — central sheet for all bowel movements and "no movement" days, including Bristol type, first-of-day flag, linked meal ID and source (morning vs symptom)
+- **Elimination periods** — log when you start/stop eliminating irritant categories (e.g. gluten, dairy, histamine) for cleaner pattern analysis in Sheets
 - **Daily targets** — calorie and macro progress bars with remaining amounts, personalised for recomposition goal
 - **7-day history** — bar chart showing daily calorie % of target
 - **Weight log** — with time-of-day context (morning weight flagged as most accurate)
@@ -74,6 +76,7 @@ The Apps Script automatically creates these sheets on first use:
 | Schema | Version of the data schema that wrote this row |
 | ID | UUID — used to link symptoms back to a meal |
 | Timestamp | ISO 8601 datetime |
+| Local date | YYYY-MM-DD (stored separately for timezone-safe day grouping) |
 | Meal Name | Auto-detected or manually entered |
 | Calories | kcal |
 | Protein (g) | grams |
@@ -94,23 +97,52 @@ The Apps Script automatically creates these sheets on first use:
 | Schema | Version |
 | ID | UUID |
 | Timestamp | ISO 8601 |
+| Local date | YYYY-MM-DD |
 | Overall feeling | 1–5 |
 | Energy level | 1–5 |
 | Bloating | 1–5 |
-| Bristol type | 1–7 (Bristol Stool Scale) |
-| Stool notes | Free text |
 | Sleep quality | 1–5 |
 | Sleep hours | Decimal e.g. 7.25 = 7h 15min |
 | Morning notes | Free text |
 | Linked meal IDs | Comma-separated UUIDs of previous day's meals |
 
+Morning logs no longer store Bristol stool data directly. Bowel movements (including “no movement today”) are written to the **Bowel Events** sheet, described below.
+
 ### Weight
 | Column | Description |
 |---|---|
 | Schema | Version |
+| Local date | YYYY-MM-DD |
 | Timestamp | ISO 8601 |
 | Weight (kg) | Decimal |
 | Time of day | morning / midday / evening |
+| Notes | Free text |
+
+### Bowel Events
+Unified log for all bowel movements and explicit “no movement” days.
+
+| Column | Description |
+|---|---|
+| Schema | Version |
+| ID | UUID |
+| Timestamp | ISO 8601 datetime |
+| Local date | YYYY-MM-DD |
+| Bristol type | 1–7 for real stool types, 0 = explicitly no movement that day |
+| Is first of day | true if this is the first event for that calendar day |
+| Linked meal ID | UUID of related meal (if logged from Symptoms tab) |
+| Notes | Free text (e.g. urgency, colour, incomplete) |
+| Source | "morning" (from morning check-in) or "symptom" (from symptoms flow) |
+
+### Elimination Log
+Tracks elimination protocol periods for different irritant categories.
+
+| Column | Description |
+|---|---|
+| Schema | Version |
+| ID | UUID |
+| Start date | YYYY-MM-DD |
+| End date | YYYY-MM-DD or empty if ongoing |
+| Category | gluten, dairy, histamine, fodmap, nightshade, oxalate, lectin, salicylate, sulphur, caffeine, high_sugar, seed_oil, other |
 | Notes | Free text |
 
 ### Errors
