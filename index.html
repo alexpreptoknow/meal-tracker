@@ -231,7 +231,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         <div class="photo-upload" onclick="document.getElementById('photo-input').click()">
           <div id="upload-icon" style="font-size:28px;">📷</div>
           <div id="upload-label" style="font-size:13px;color:var(--tx2);margin-top:4px;">Tap to add photo</div>
-          <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)">
+          <input type="file" id="photo-input" accept="image/*" style="display:none" onchange="handlePhoto(this)">
         </div>
         <img id="photo-preview" class="photo-preview">
       </div>
@@ -1060,6 +1060,7 @@ async function analyzeWithClaude(){
       btn.textContent='Re-analyze'; btn.disabled=false;
       return;
     }catch(netErr){
+      console.error('Claude API error:', netErr);
       lastErrors=['Network error: '+netErr.message];
       if(attempt<maxRetries){ await new Promise(r=>setTimeout(r,1500)); continue; }
     }
