@@ -577,6 +577,67 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     </div>
   </div>
 
+  <!-- FOODS LIBRARY -->
+  <div id="section-foods" class="section">
+    <div class="card">
+      <div class="section-label">Your foods library</div>
+      <div style="font-size:12px;color:var(--tx2);margin-bottom:10px;">
+        Add products you refer to as <span class="pill pill-blue" style="font-size:11px;">my ___</span> in Ingredients (e.g. “my peanut butter”).
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Nickname <span class="hint">required</span></div>
+        <input type="text" id="food-nickname" placeholder="e.g. peanut butter">
+        <div style="font-size:11px;color:var(--tx3);margin-top:5px;">Use in meals as: <b>my peanut butter</b></div>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Display name <span class="hint">optional</span></div>
+        <input type="text" id="food-display" placeholder="e.g. Meridian Smooth Peanut Butter">
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Label text <span class="hint">optional</span></div>
+        <textarea id="food-label-text" rows="4" placeholder="Paste nutrition label here (best). Example: Serving size 15g. Per serving: 95 kcal, fat 8g, carbs 3g, protein 4g..."></textarea>
+      </div>
+
+      <div class="field-row">
+        <div class="field-label">Label photo <span class="hint">optional</span></div>
+        <div class="photo-upload" onclick="document.getElementById('food-photo-input').click()">
+          <div id="food-upload-icon" style="font-size:22px;">🏷️</div>
+          <div id="food-upload-label" style="font-size:13px;color:var(--tx2);margin-top:4px;">Tap to add label photo</div>
+          <input type="file" id="food-photo-input" accept="image/*" style="display:none" onchange="handleFoodPhoto(this)">
+        </div>
+        <div id="food-photo-preview"></div>
+      </div>
+
+      <button class="btn-outline" id="food-analyze-btn" onclick="analyzeFoodLabel()">Analyze label</button>
+
+      <div class="ai-result" id="food-ai-result" style="display:none;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:11px;color:var(--green-tx);font-weight:600;">Parsed macros (per serving)</div>
+          <div id="food-ai-source" style="font-size:11px;"></div>
+        </div>
+        <div id="food-ai-serving" style="font-weight:600;font-size:13px;margin-bottom:8px;"></div>
+        <div class="macro-grid">
+          <div class="macro-card"><div class="macro-val" id="food-ai-cal">-</div><div class="macro-lbl">kcal</div></div>
+          <div class="macro-card"><div class="macro-val" id="food-ai-pro">-</div><div class="macro-lbl">protein</div></div>
+          <div class="macro-card"><div class="macro-val" id="food-ai-carb">-</div><div class="macro-lbl">carbs</div></div>
+          <div class="macro-card"><div class="macro-val" id="food-ai-fat">-</div><div class="macro-lbl">fat</div></div>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="food-save-btn" onclick="saveFoodToLibrary()" disabled>Save to library</button>
+      <div class="status-msg" id="food-status"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Saved foods</div>
+      <button class="btn-secondary" onclick="loadFoods()">↻ Refresh</button>
+      <div id="foods-list" style="margin-top:10px;"><div class="empty-state">No saved foods yet.</div></div>
+    </div>
+  </div>
+
   <!-- SETTINGS -->
   <div id="section-settings" class="section">
     <div class="card">
@@ -611,6 +672,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <button class="btab"        id="btab-symptoms" onclick="showSection('symptoms')"><span class="btab-icon">🌡️</span><span>Symptoms</span></button>
     <button class="btab"        id="btab-history"  onclick="showSection('history')">  <span class="btab-icon">📊</span><span>History</span></button>
     <button class="btab"        id="btab-weight"   onclick="showSection('weight')">   <span class="btab-icon">⚖️</span><span>Weight</span></button>
+    <button class="btab"        id="btab-foods"    onclick="showSection('foods')">    <span class="btab-icon">🧺</span><span>Foods</span></button>
   </nav>
 </div>
 
@@ -645,7 +707,10 @@ let state = {
   photoBase64s:[], aiData:null, meals:[],
   timeUserEdited:false,
   symBowel:'no', symBristol:null,
-  morning:{ overall:0, energy:0, mbloat:0, sleepq:0, bristol:0, sleepH:0, sleepM:0, bowelState:'notyet' }
+  morning:{ overall:0, energy:0, mbloat:0, sleepq:0, bristol:0, sleepH:0, sleepM:0, bowelState:'notyet' },
+  foods:[],
+  foodPhotoBase64:'',
+  foodDraft:null
 };
 
 // ── CONFIG ───────────────────────────────────────────────────────────────────
@@ -690,6 +755,7 @@ function showSection(name){
   if(name==='symptoms') loadMealsForSelect();
   if(name==='history')  loadHistory();
   if(name==='weight')   loadWeightLog();
+  if(name==='foods')    loadFoods();
   if(name==='morning')  loadPrevMeals();
   window.scrollTo(0,0);
 }
@@ -1034,7 +1100,7 @@ function validateMacros(parsed){
   return errors;
 }
 
-function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors){
+function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors,foodsLibrary){
   const isRetry=!!prevErrors;
   let p=`You are a precise nutrition calculator. Respond ONLY with a single valid JSON object — no markdown, no explanation, nothing else.
 
@@ -1060,6 +1126,11 @@ Rules:
 - Do NOT include database IDs or fabricated citations (e.g. “FoodData Central #12345”). If you used generic nutrition knowledge, say so plainly.
 - For irritants: list the SPECIFIC ingredient names that triggered each category — empty array if none
 - meal_name should be short and human-readable`;
+  if(foodsLibrary && foodsLibrary.length){
+    p+=`\n\nPersonal foods library (ONLY use these if the user explicitly writes "my <nickname>" in Ingredients):\n`+
+       foodsLibrary.map(f=>`- nickname: "${f.nickname}" · serving: "${f.serving_size}" · per serving: ${f.calories} kcal, P ${f.protein_g}g, C ${f.carbs_g}g, F ${f.fat_g}g`).join('\n')+
+       `\n\nRule: If Ingredients contains "my ${'${nickname}'}", then use that food's per-serving macros and mark evidence as label_text or label_photo (if the library Source came from a label). Otherwise, assume generic values and do NOT use the library.`;
+  }
   if(ingredients) p+=`\n\nIngredients: "${ingredients}"\nUse as PRIMARY source for calculations.`;
   if(hasPhoto){
     p+=`\n\nA photo is attached.`;
@@ -1112,7 +1183,26 @@ async function analyzeWithClaude(){
     attempt++;
     btn.textContent=attempt===1?'Analyzing...':'Retrying ('+attempt+'/'+maxRetries+')...';
     try{
-      const prompt=buildPrompt(ingredients,hasPhoto,lastRaw,lastErrors);
+      // Load foods library for "my <nickname>" items (optional).
+      let foodsLib = [];
+      try{
+        const foodsRes=await fetch(cfg.sheetUrl+'?sheet=foods&t='+Date.now());
+        const foodsJson=await foodsRes.json();
+        foodsLib=(foodsJson.foods||[])
+          .filter(f=>String(f['Active']).toLowerCase()!=='false')
+          .map(f=>({
+            nickname:(f['Nickname']||'').toString(),
+            serving_size:(f['Serving size']||'').toString(),
+            calories:+f['Calories']||0,
+            protein_g:+f['Protein (g)']||0,
+            carbs_g:+f['Carbs (g)']||0,
+            fat_g:+f['Fat (g)']||0,
+            source:(f['Source']||'').toString()
+          }))
+          .filter(f=>f.nickname);
+      }catch(e){ /* ignore foods library load errors */ }
+
+      const prompt=buildPrompt(ingredients,hasPhoto,lastRaw,lastErrors,foodsLib);
       const content=[];
       if(hasPhoto){
         for(const b64 of state.photoBase64s){
@@ -1277,6 +1367,198 @@ function base64Bytes(b64){
   const len=(b64||'').length;
   const pad=(b64.endsWith('==')?2:b64.endsWith('=')?1:0);
   return Math.floor((len*3)/4) - pad;
+}
+
+// ── FOODS LIBRARY ─────────────────────────────────────────────────────────────
+async function loadFoods(){
+  const cfg=getConfig();
+  const el=document.getElementById('foods-list');
+  if(!el) return;
+  el.innerHTML='<div class="empty-state">Loading...</div>';
+  try{
+    const res=await fetch(cfg.sheetUrl+'?sheet=foods&t='+Date.now());
+    const json=await res.json();
+    if(!json.success){ el.innerHTML='<div class="empty-state">Could not load foods.</div>'; return; }
+    state.foods=(json.foods||[]).filter(f=>String(f['Active']).toLowerCase()!=='false');
+    renderFoodsList();
+  }catch(e){
+    el.innerHTML='<div class="empty-state">Failed to load: '+escapeHtml(e.message)+'</div>';
+  }
+}
+
+function renderFoodsList(){
+  const el=document.getElementById('foods-list');
+  if(!el) return;
+  const foods=(state.foods||[]).slice().reverse();
+  if(!foods.length){ el.innerHTML='<div class="empty-state">No saved foods yet.</div>'; return; }
+  el.innerHTML=foods.map(f=>{
+    const name=(f['Display name']||f['Nickname']||'').toString();
+    const nick=(f['Nickname']||'').toString();
+    const serving=(f['Serving size']||'').toString();
+    const macros=[
+      f['Calories']?Math.round(+f['Calories'])+' kcal':'',
+      f['Protein (g)']?'P '+Math.round(+f['Protein (g)'])+'g':'',
+      f['Carbs (g)']?'C '+Math.round(+f['Carbs (g)'])+'g':'',
+      f['Fat (g)']?'F '+Math.round(+f['Fat (g)'])+'g':''
+    ].filter(Boolean).join(' · ');
+    const id=(f['ID']||'').toString();
+    return `<div class="weight-item" style="gap:10px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;">${escapeHtml(name)}</div>
+        <div style="font-size:11px;color:var(--tx2);margin-top:2px;">
+          use as <b>my ${escapeHtml(nick)}</b>${serving?' · '+escapeHtml(serving):''}${macros?' · '+escapeHtml(macros):''}
+        </div>
+      </div>
+      <button class="btn-secondary" style="width:auto;padding:8px 10px;margin-top:0;" onclick="disableFood('${escapeHtml(id)}')">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+async function disableFood(id){
+  if(!id) return;
+  const cfg=getConfig();
+  try{
+    const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify({action:'disable_food',id})});
+    const json=await res.json();
+    if(!json.success){ showStatus('food-status','Error: '+(json.error||'unknown'),false); return; }
+    showStatus('food-status','Removed from library ✓',true);
+    loadFoods();
+  }catch(e){
+    showStatus('food-status','Failed: '+e.message,false);
+  }
+}
+
+async function handleFoodPhoto(input){
+  const file=(input.files&&input.files[0])||null;
+  if(!file) return;
+  const preview=document.getElementById('food-photo-preview');
+  if(preview) preview.innerHTML='';
+  document.getElementById('food-upload-icon').textContent='⏳';
+  document.getElementById('food-upload-label').textContent='Processing label photo...';
+  try{
+    const processed = await compressImageFileToJpegBase64(file);
+    state.foodPhotoBase64 = processed.base64;
+    if(preview){
+      const img=document.createElement('img');
+      img.src=processed.dataUrl;
+      img.className='photo-preview-multi';
+      preview.appendChild(img);
+    }
+    document.getElementById('food-upload-icon').textContent='✅';
+    document.getElementById('food-upload-label').textContent='Label photo added · tap to replace';
+  }catch(e){
+    state.foodPhotoBase64='';
+    document.getElementById('food-upload-icon').textContent='⚠️';
+    document.getElementById('food-upload-label').textContent='Photo too large. Try a tighter crop.';
+  }
+}
+
+function buildFoodPrompt(nickname, displayName, labelText, hasPhoto){
+  const title = displayName ? `${displayName} (${nickname})` : nickname;
+  let p=`You are extracting nutrition facts from a product label.
+Return ONLY a single valid JSON object. No markdown.
+
+Required format:
+{"serving_size":"...","calories":123,"protein_g":4,"carbs_g":3,"fat_g":8,"source":"label_text|label_photo|assumed_generic","notes":"short note about any ambiguity"}
+
+Rules:
+- Values must be PER SERVING (not per 100g unless serving_size says 100g).
+- If label shows per 100g and serving size differs, convert to per serving.
+- If something is missing, make a best estimate but set source to assumed_generic and explain briefly in notes.
+
+Product: "${title}"`;
+  if(labelText) p+=`\n\nLabel text (user-provided):\n${labelText}`;
+  if(hasPhoto) p+=`\n\nA label photo is attached. Use it to read serving size and macros.`;
+  return p;
+}
+
+async function analyzeFoodLabel(){
+  const cfg=getConfig();
+  if(!cfg.claudeKey){ alert('Add your Claude API key in Settings first.'); return; }
+  const nickname=(document.getElementById('food-nickname').value||'').trim();
+  if(!nickname){ showStatus('food-status','Please set a nickname (e.g. peanut butter).',false); return; }
+  const displayName=(document.getElementById('food-display').value||'').trim();
+  const labelText=(document.getElementById('food-label-text').value||'').trim();
+  const hasPhoto=!!state.foodPhotoBase64;
+  if(!labelText && !hasPhoto){ showStatus('food-status','Add label text or a label photo first.',false); return; }
+
+  const btn=document.getElementById('food-analyze-btn');
+  btn.disabled=true; btn.textContent='Analyzing...';
+  try{
+    const prompt=buildFoodPrompt(nickname,displayName,labelText,hasPhoto);
+    const content=[];
+    if(hasPhoto){
+      content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:state.foodPhotoBase64}});
+    }
+    content.push({type:'text',text:prompt});
+    const raw=await callClaude(cfg.claudeKey,content,600);
+    const parsed=extractJSON(raw);
+    state.foodDraft={
+      nickname:nickname.toLowerCase(),
+      display_name:displayName,
+      serving_size:parsed.serving_size||'',
+      calories:+parsed.calories||0,
+      protein_g:+parsed.protein_g||0,
+      carbs_g:+parsed.carbs_g||0,
+      fat_g:+parsed.fat_g||0,
+      source:(parsed.source|| (labelText?'label_text': hasPhoto?'label_photo':'assumed_generic')),
+      notes:parsed.notes||''
+    };
+    renderFoodDraft();
+    document.getElementById('food-save-btn').disabled=false;
+    showStatus('food-status','Label parsed ✓ Review and save.',true);
+  }catch(e){
+    showStatus('food-status','Could not analyze label: '+e.message,false);
+  }
+  btn.disabled=false; btn.textContent='Analyze label';
+}
+
+function renderFoodDraft(){
+  const d=state.foodDraft;
+  if(!d) return;
+  document.getElementById('food-ai-serving').textContent=d.serving_size?('Serving: '+d.serving_size):'Serving: (unknown)';
+  document.getElementById('food-ai-cal').textContent=Math.round(d.calories||0);
+  document.getElementById('food-ai-pro').textContent=Math.round(d.protein_g||0)+'g';
+  document.getElementById('food-ai-carb').textContent=Math.round(d.carbs_g||0)+'g';
+  document.getElementById('food-ai-fat').textContent=Math.round(d.fat_g||0)+'g';
+  const src=(d.source||'assumed_generic').replace('_',' ');
+  document.getElementById('food-ai-source').textContent=src;
+  document.getElementById('food-ai-result').style.display='block';
+}
+
+async function saveFoodToLibrary(){
+  const d=state.foodDraft;
+  if(!d){ showStatus('food-status','Analyze a label first.',false); return; }
+  const cfg=getConfig();
+  const payload={
+    action:'add_food',
+    nickname:d.nickname,
+    display_name:d.display_name,
+    aliases:'',
+    serving_size:d.serving_size,
+    calories:d.calories,
+    protein_g:d.protein_g,
+    carbs_g:d.carbs_g,
+    fat_g:d.fat_g,
+    source:d.source,
+    notes:d.notes
+  };
+  const btn=document.getElementById('food-save-btn');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving...';
+  try{
+    const res=await fetch(cfg.sheetUrl,{method:'POST',body:JSON.stringify(payload)});
+    const json=await res.json();
+    if(!json.success){ showStatus('food-status','Error: '+(json.error||'unknown'),false); return; }
+    showStatus('food-status','Saved to library ✓',true);
+    // Reset draft
+    state.foodDraft=null;
+    document.getElementById('food-ai-result').style.display='none';
+    document.getElementById('food-save-btn').disabled=true;
+    loadFoods();
+  }catch(e){
+    showStatus('food-status','Failed: '+e.message,false);
+  }
+  btn.disabled=false; btn.textContent='Save to library';
 }
 
 // ── SAVE MEAL ─────────────────────────────────────────────────────────────────
