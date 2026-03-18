@@ -981,7 +981,15 @@ function extractJSON(raw){
   let text=raw.replace(/```json|```/gi,'').trim();
   const s=text.indexOf('{'), e=text.lastIndexOf('}');
   if(s===-1||e===-1) throw new Error('No JSON found in response');
-  return JSON.parse(text.slice(s,e+1));
+  let candidate=text.slice(s,e+1);
+  // Common model formatting issues:
+  // - smart quotes
+  // - trailing commas
+  candidate=candidate
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'")
+    .replace(/,\s*([}\]])/g,'$1');
+  return JSON.parse(candidate);
 }
 
 function validateMacros(parsed){
@@ -1003,7 +1011,7 @@ function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors){
   let p=`You are a precise nutrition calculator. Respond ONLY with a single valid JSON object — no markdown, no explanation, nothing else.
 
 Required format:
-{"meal_name":"...","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"high|medium|low","ai_short":"2–3 sentences max: what the meal contains + macro totals","ai_long":"longer reasoning: how you estimated portions + macro calc logic + assumptions + what references/sources you used","ai_references":[string,string],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
+{"meal_name":"...","calories":123,"protein_g":45,"carbs_g":67,"fat_g":12,"confidence":"high","ai_short":"2-3 sentences max: what the meal contains + macro totals (kcal/P/C/F).","ai_long":"Longer reasoning: how you estimated portions + macro calc logic + assumptions + what references/sources you used.","ai_references":["USDA FoodData Central","nutrition label (if applicable)"],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
 
 Rules:
 - calories must be between 50 and 3000
