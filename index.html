@@ -721,7 +721,17 @@ function isYMD(s){
 
 function ymdFromAnyLocalDateField(rec){
   if(!rec || typeof rec !== 'object') return '';
-  const ld = (rec['Local date'] ?? rec['Local Date'] ?? rec['local_date'] ?? rec['localDate'] ?? '').toString().slice(0,10);
+  const raw = (rec['Local date'] ?? rec['Local Date'] ?? rec['local_date'] ?? rec['localDate'] ?? '');
+  const s = String(raw).trim();
+  // Common case: already a YYYY-MM-DD string
+  if(isYMD(s)) return s;
+  // If it's an ISO timestamp (or any date-ish string), interpret it as a Date and
+  // derive the day in local time. This fixes Sheets date cells that serialize as
+  // e.g. "2026-03-17T22:00:00.000Z" for a local-date of 2026-03-18.
+  const d = new Date(s);
+  if(!isNaN(d)) return localYMD(d);
+  // Fallback: try first 10 chars
+  const ld = s.slice(0,10);
   return isYMD(ld) ? ld : '';
 }
 
