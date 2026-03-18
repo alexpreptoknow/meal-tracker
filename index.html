@@ -1225,14 +1225,21 @@ function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors,foodsLibrary){
   let p=`You are a precise nutrition calculator. Respond ONLY with a single valid JSON object — no markdown, no explanation, nothing else.
 
 Required format:
-{"meal_name":"...","calories":123,"protein_g":45,"carbs_g":67,"fat_g":12,"confidence":"high","ai_short":"2-3 sentences max: what the meal contains + macro totals (kcal/P/C/F).","ai_long":"Explain HOW you estimated portions and macros, and call out the biggest uncertainty. Do not cite database IDs.","ai_breakdown":[{"item":"whole eggs","amount":"2 large eggs","evidence":"user_text|photo_inferred|label_text|label_photo|assumed_generic","macros":{"calories":140,"protein_g":12,"carbs_g":1,"fat_g":10},"notes":"Why these assumptions."}],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
+{"meal_name":"...","calories":123,"protein_g":45,"carbs_g":67,"fat_g":12,"confidence":"high","ai_short":"2–3 sentences max. List the major products/foods in the meal (not every ingredient, not gram-by-gram), then include macro totals (kcal/P/C/F).","ai_long":"A structured explanation that distinguishes user-provided input vs assumed values, and explains how portions/macros were estimated. Call out the biggest uncertainty. Do not cite database IDs.","ai_breakdown":[{"item":"whole eggs","amount":"2 large eggs","evidence":"user_text|photo_inferred|label_text|label_photo|assumed_generic","macros":{"calories":140,"protein_g":12,"carbs_g":1,"fat_g":10},"notes":"Why these assumptions."}],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
 
 Rules:
 - calories must be between 50 and 3000
 - protein_g, carbs_g, fat_g must be between 0 and 300
-- ai_short must be 2–3 sentences max and include calorie/protein/carbs/fat totals
-- ai_long must explain HOW you estimated the macros and list the biggest uncertainty (e.g. portion size, cooking oil, brand differences)
-- ai_breakdown must be an array of per-item estimates. Each item must include:
+- ai_short must be 2–3 sentences max and include calorie/protein/carbs/fat totals.
+  - ai_short MUST list ONLY the major products/foods you identified (roughly 3–8 items). Do NOT enumerate every ingredient or provide gram calculations.
+  - Examples of "major products/foods": chicken breast, rice, olive oil, peanut butter, protein bar, whey shake, pasta, pesto, cheese.
+  - Examples of what to avoid in ai_short: “2g garlic, 8g onion, 3g parsley…”, or listing every spice/condiment.
+- ai_long must be clearly structured with these sections (use plain text labels):
+  - "User input:" (only facts explicitly provided by the user in Ingredients text or clearly visible label text)
+  - "Assumed values:" (all assumptions: estimated portion sizes, generic items, cooking oil, preparation method, brand defaults, recipe defaults)
+  - "Macro-relevant ingredients considered:" a fairly exhaustive list of ingredients/components that meaningfully affect calories/protein/carbs/fat (including cooking oils, dairy, grains, meats, sweeteners). Do NOT list minor condiments/spices unless they materially affect macros.
+  - "Biggest uncertainty:" (one or two items)
+- ai_breakdown must be an array of per-item estimates, focused on macro-relevant components. Each item must include:
   - item (string), amount (string)
   - evidence: one of user_text | photo_inferred | label_text | label_photo | assumed_generic
   - macros object with calories/protein_g/carbs_g/fat_g as numbers
