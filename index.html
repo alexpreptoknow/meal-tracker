@@ -543,6 +543,25 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <div id="history-list" style="margin-top:12px;"></div>
   </div>
 
+  <!-- ARCHIVE (OLDER DAYS) -->
+  <div id="section-archive" class="section">
+    <div class="card">
+      <div class="section-label">History</div>
+      <div class="field-row">
+        <div class="field-label">Day</div>
+        <input type="date" id="hist-date" onchange="loadArchive()">
+      </div>
+      <div class="field-row">
+        <div class="field-label">Search <span class="hint">meal, ingredients, symptoms</span></div>
+        <input type="text" id="hist-q" placeholder="e.g. eggs, honey, reflux..." oninput="loadArchive()">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-secondary" onclick="loadArchive()">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="archive-list" style="margin-top:12px;"></div>
+  </div>
+
   <!-- WEIGHT -->
   <div id="section-weight" class="section">
     <div class="card">
@@ -670,7 +689,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     <button class="btab active" id="btab-log"      onclick="showSection('log')">      <span class="btab-icon">🍽️</span><span>Meal</span></button>
     <button class="btab"        id="btab-morning"  onclick="showSection('morning')">  <span class="btab-icon">🌅</span><span>Morning</span></button>
     <button class="btab"        id="btab-symptoms" onclick="showSection('symptoms')"><span class="btab-icon">🌡️</span><span>Symptoms</span></button>
-    <button class="btab"        id="btab-history"  onclick="showSection('history')">  <span class="btab-icon">📊</span><span>History</span></button>
+    <button class="btab"        id="btab-history"  onclick="showSection('history')">  <span class="btab-icon">📈</span><span>Streak</span></button>
+    <button class="btab"        id="btab-archive"  onclick="showSection('archive')">  <span class="btab-icon">🗓️</span><span>History</span></button>
     <button class="btab"        id="btab-weight"   onclick="showSection('weight')">   <span class="btab-icon">⚖️</span><span>Weight</span></button>
     <button class="btab"        id="btab-foods"    onclick="showSection('foods')">    <span class="btab-icon">🧺</span><span>Foods</span></button>
   </nav>
@@ -693,6 +713,30 @@ function localYMD(d=new Date()){
   const m=String(d.getMonth()+1).padStart(2,'0');
   const day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
+}
+
+function isYMD(s){
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function ymdFromAnyLocalDateField(rec){
+  if(!rec || typeof rec !== 'object') return '';
+  const ld = (rec['Local date'] ?? rec['Local Date'] ?? rec['local_date'] ?? rec['localDate'] ?? '').toString().slice(0,10);
+  return isYMD(ld) ? ld : '';
+}
+
+function ymdFromTimestampLocal(ts){
+  if(!ts) return '';
+  const d = new Date(ts);
+  if(isNaN(d)) return '';
+  return localYMD(d); // local timezone day
+}
+
+// Single source of truth for day grouping: prefer explicit Local date; else derive from Timestamp in local time.
+function dayKey(rec, tsField='Timestamp'){
+  const ld = ymdFromAnyLocalDateField(rec);
+  if(ld) return ld;
+  return ymdFromTimestampLocal(rec && rec[tsField]);
 }
 
 // Safely construct an ISO timestamp from separate date and time strings.
@@ -745,6 +789,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('w-date').value=localYMD(now);
   document.getElementById('m-date').value=localYMD(now);
   document.getElementById('m-time').value=now.toTimeString().slice(0,5);
+  const hd=document.getElementById('hist-date');
+  if(hd) hd.value=localYMD(now);
   const cfg=getConfig();
   if(cfg.claudeKey) document.getElementById('cfg-claude').value=cfg.claudeKey;
   if(cfg.sheetUrl!==SHEET_URL_DEFAULT) document.getElementById('cfg-sheet').value=cfg.sheetUrl;
@@ -761,6 +807,7 @@ function showSection(name){
   if(bt) bt.classList.add('active');
   if(name==='symptoms') loadMealsForSelect();
   if(name==='history')  loadHistory();
+  if(name==='archive')  loadArchive();
   if(name==='weight')   loadWeightLog();
   if(name==='foods')    loadFoods();
   if(name==='morning')  loadPrevMeals();
@@ -790,12 +837,8 @@ async function checkMorningBanner(){
   try{
     const res=await fetch(cfg.sheetUrl+'?sheet=morning&t='+Date.now());
     const json=await res.json();
-    // Use local_date if available, fall back to timestamp comparison
     const todayLocal=localYMD(new Date());
-    const todayLog=(json.morning||[]).find(m=>
-      (m['Local date']&&m['Local date'].toString().slice(0,10)===todayLocal) ||
-      new Date(m['Timestamp']).toDateString()===new Date().toDateString()
-    );
+    const todayLog=(json.morning||[]).find(m=>dayKey(m,'Timestamp')===todayLocal);
     if(todayLog){
       document.getElementById('banner-text').textContent='✅ Morning check-in done';
       document.getElementById('banner-sub').textContent='Logged at '+new Date(todayLog['Timestamp']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
@@ -901,10 +944,7 @@ async function loadPrevMeals(){
     // Use local_date for reliable day matching without timezone issues
     const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
     const yLocal=localYMD(yesterday);
-    const prevMeals=json.meals.filter(m=>
-      (m['Local date']&&m['Local date'].toString().slice(0,10)===yLocal) ||
-      new Date(m['Timestamp']).toDateString()===yesterday.toDateString()
-    );
+    const prevMeals=json.meals.filter(m=>dayKey(m,'Timestamp')===yLocal);
     if(!prevMeals.length){ card.style.display='none'; return; }
     card.style.display='block';
     list.innerHTML=prevMeals.map(m=>{
@@ -1776,11 +1816,7 @@ async function loadHistory(){
     if(!json.success){ list.innerHTML='<div class="empty-state">Could not load. Check your Apps Script URL in Settings.</div>'; return; }
     state.meals=json.meals||[];
     const todayKey=localYMD(new Date());
-    const todayMeals=state.meals.filter(m=>{
-      const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
-      if(ld) return ld===todayKey;
-      return new Date(m['Timestamp']).toDateString()===new Date().toDateString();
-    });
+    const todayMeals=state.meals.filter(m=>dayKey(m,'Timestamp')===todayKey);
     let tCal=0,tPro=0,tCarb=0,tFat=0;
     todayMeals.forEach(m=>{ tCal+=parseFloat(m['Calories'])||0; tPro+=parseFloat(m['Protein (g)'])||0; tCarb+=parseFloat(m['Carbs (g)'])||0; tFat+=parseFloat(m['Fat (g)'])||0; });
     document.getElementById('rem-cal').textContent=Math.max(0,GOALS.cal-Math.round(tCal));
@@ -1798,11 +1834,7 @@ async function loadHistory(){
       const d=new Date(now); d.setDate(now.getDate()-i);
       const key=localYMD(d);
       const cal=state.meals
-        .filter(m=>{
-          const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
-          if(ld) return ld===key;
-          return new Date(m['Timestamp']).toDateString()===d.toDateString();
-        })
+        .filter(m=>dayKey(m,'Timestamp')===key)
         .reduce((s,m)=>s+(parseFloat(m['Calories'])||0),0);
       const pct=Math.min(140,Math.round(cal/GOALS.cal*100));
       weekData.push({label:d.toLocaleDateString('en-GB',{weekday:'short'}),pct});
@@ -1817,44 +1849,35 @@ async function loadHistory(){
 
     const morningLogs=(morningJson && morningJson.morning) ? morningJson.morning : [];
     const todayMorning = (morningLogs||[]).slice().reverse().find(m=>{
-      const ts = m && m['Timestamp'] ? new Date(m['Timestamp']) : null;
-      return ts && !isNaN(ts) && ts.toDateString()===new Date().toDateString();
+      return dayKey(m,'Timestamp')===todayKey;
     });
 
     const bowelEvents=(bowelJson && bowelJson.bowel) ? bowelJson.bowel : [];
     const todayBowel = (bowelEvents||[]).slice().reverse().filter(b=>{
-      const ld=(b['Local date']||b['Local Date']||'').toString().slice(0,10);
-      if(ld) return ld===todayKey;
-      const ts = b && b['Timestamp'] ? new Date(b['Timestamp']) : null;
-      return ts && !isNaN(ts) && ts.toDateString()===new Date().toDateString();
+      return dayKey(b,'Timestamp')===todayKey;
     });
 
-    const todaySymptoms = todayMeals
-      .filter(m=>m['Symptom Score']||m['Symptom Type']||m['Symptom Time'])
-      .map(m=>{
-        const st = m['Symptom Time'] ? new Date(m['Symptom Time']) : null;
-        const symptomTimeStr = (st && !isNaN(st))
-          ? st.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
-          : '';
-        return {
-          mealName: (m['Meal Name']||'Untitled').toString(),
-          score: m['Symptom Score']||'',
-          type: (m['Symptom Type']||'').toString(),
-          time: symptomTimeStr
-        };
-      });
+    const mealNameById = new Map((state.meals||[]).map(m=>[String(m&&m['ID']||''), (m&&m['Meal Name']||'Untitled').toString()]));
+    const toMs = (ts)=>{
+      const d=new Date(ts);
+      const t=d.getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
 
-    const todayHeader = `<div class="section-label" style="margin-bottom:8px;">Today</div>`;
-    const todayCards = [
-      (todayMorning ? (() => {
-        const d=new Date(todayMorning['Timestamp']);
-        const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-        const rows=[];
-        if(todayMorning['Overall feeling']) rows.push({lbl:'Overall',val:todayMorning['Overall feeling']});
-        if(todayMorning['Energy level']) rows.push({lbl:'Energy',val:todayMorning['Energy level']});
-        if(todayMorning['Bloating']) rows.push({lbl:'Bloat',val:todayMorning['Bloating']});
-        if(todayMorning['Sleep quality']) rows.push({lbl:'Sleep',val:todayMorning['Sleep quality']});
-        return `<div class="morning-card">
+    const timeline=[];
+
+    // Morning check-in
+    if(todayMorning){
+      const d=new Date(todayMorning['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const rows=[];
+      if(todayMorning['Overall feeling']) rows.push({lbl:'Overall',val:todayMorning['Overall feeling']});
+      if(todayMorning['Energy level']) rows.push({lbl:'Energy',val:todayMorning['Energy level']});
+      if(todayMorning['Bloating']) rows.push({lbl:'Bloat',val:todayMorning['Bloating']});
+      if(todayMorning['Sleep quality']) rows.push({lbl:'Sleep',val:todayMorning['Sleep quality']});
+      timeline.push({
+        ts: toMs(todayMorning['Timestamp']),
+        html: `<div class="morning-card">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;">
             <div style="font-weight:600;">🌅 Morning check-in</div>
             <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${timeStr}</div>
@@ -1862,116 +1885,267 @@ async function loadHistory(){
           <div class="morning-scores">
             ${rows.map(r=>`<div class="mscore"><div class="mscore-val">${escapeHtml(r.val)}</div><div class="mscore-lbl">${escapeHtml(r.lbl)}</div></div>`).join('')}
           </div>
-          ${todayBowel.length ? `<div style="margin-top:8px;font-size:11px;color:var(--tx2);">💩 Bowel: ${todayBowel.map(b=>`type ${escapeHtml(b['Bristol type']??b['Bristol type']??b['Bristol']??b['Bristol Type']??b['Bristol type'])}`).join(', ')}</div>` : ''}
-        </div>`;
-      })() : `<div class="empty-state" style="padding:1rem 0;">No morning check-in yet.</div>`),
-
-      (todaySymptoms.length ? `<div class="card" style="margin-bottom:10px;">
-        <div class="section-label" style="margin-bottom:8px;">Symptoms</div>
-        ${todaySymptoms.map(s=>`<div class="weight-item" style="padding:10px 0;">
-          <span style="font-weight:600;">${escapeHtml(s.mealName)}</span>
-          <span style="color:var(--tx2);font-size:12px;">${s.time?s.time+' · ':''}${s.score?('Bloat '+escapeHtml(s.score)+'/5'):''}${s.type?(' · '+escapeHtml(s.type)):""}</span>
-        </div>`).join('')}
-      </div>` : `<div class="empty-state" style="padding:1rem 0;">No symptoms logged today.</div>`)
-    ].join('');
-
-    const todayMealsHtml = todayMeals.length
-      ? `<div class="section-label" style="margin:14px 0 8px;">Meals</div>` +
-        [...todayMeals].slice().reverse().map(m=>{
-          const d=new Date(m['Timestamp']);
-          const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-          const hasSym=m['Symptom Score']||m['Symptom Type'];
-          let irritantTags='';
-          try{
-            const irr=typeof m['Irritants']==='string'&&m['Irritants']?JSON.parse(m['Irritants']):m['Irritants'];
-            if(irr){
-              const tags=Object.entries(irr).filter(([,v])=>v&&v.length>0).map(([k,v])=>`<span class="itag">${k}: ${v.join(', ')}</span>`);
-              if(tags.length) irritantTags=`<div class="irritant-row" style="margin-top:5px;">${tags.join('')}</div>`;
-            }
-          }catch(e){}
-          const aiShort = (m['AI Short']||'').toString().trim();
-          const aiShortHtml = aiShort
-            ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
-            : '';
-          return `<div class="meal-card">
-            <div class="meal-card-header">
-              <span class="meal-card-name">${m['Meal Name']||'Untitled'}</span>
-              <span class="meal-card-time">${timeStr}</span>
-            </div>
-            <div class="pills">
-              ${m['Calories']?`<span class="pill">${Math.round(m['Calories'])} kcal</span>`:''}
-              ${m['Protein (g)']?`<span class="pill">P ${Math.round(m['Protein (g)'])}g</span>`:''}
-              ${m['Carbs (g)']?`<span class="pill">C ${Math.round(m['Carbs (g)'])}g</span>`:''}
-              ${m['Fat (g)']?`<span class="pill">F ${Math.round(m['Fat (g)'])}g</span>`:''}
-              ${m['Mood']?`<span class="pill">${m['Mood']}</span>`:''}
-            </div>
-            ${irritantTags}
-            ${aiShortHtml}
-            ${hasSym
-              ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${m['Symptom Score']}/5${m['Symptom Type']?' · '+m['Symptom Type']:''}</span>`
-              :``}
-          </div>`;
-        }).join('')
-      : `<div class="empty-state" style="padding:1rem 0;">No meals logged today yet.</div>`;
-
-    if(!state.meals.length){
-      list.innerHTML = todayHeader + todayCards + todayMealsHtml;
-      return;
+        </div>`
+      });
     }
 
-    const earlierMeals=[...state.meals].filter(m=>{
-      const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
-      if(ld) return ld!==todayKey;
-      return new Date(m['Timestamp']).toDateString()!==new Date().toDateString();
-    });
-
-    list.innerHTML=
-      todayHeader + todayCards + todayMealsHtml +
-      (earlierMeals.length
-        ? '<div class="section-label" style="margin:16px 0 8px;">Earlier</div>' +
-          earlierMeals.slice().reverse().map(m=>{
-        const d=new Date(m['Timestamp']);
-        const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-        const dateStr=isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-        const hasSym=m['Symptom Score']||m['Symptom Type'];
-
-        // Parse irritants
-        let irritantTags='';
-        try{
-          const irr=typeof m['Irritants']==='string'&&m['Irritants']?JSON.parse(m['Irritants']):m['Irritants'];
-          if(irr){
-            const tags=Object.entries(irr).filter(([,v])=>v&&v.length>0).map(([k,v])=>`<span class="itag">${k}: ${v.join(', ')}</span>`);
-            if(tags.length) irritantTags=`<div class="irritant-row" style="margin-top:5px;">${tags.join('')}</div>`;
-          }
-        }catch(e){}
-
-        const aiShort = (m['AI Short']||'').toString().trim();
-        const aiShortHtml = aiShort
-          ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
-          : '';
-
-        return `<div class="meal-card">
+    // Meals (and meal-linked symptom pills)
+    (todayMeals||[]).forEach(m=>{
+      const d=new Date(m['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const hasSym=m['Symptom Score']||m['Symptom Type'];
+      let irritantTags='';
+      try{
+        const irr=typeof m['Irritants']==='string'&&m['Irritants']?JSON.parse(m['Irritants']):m['Irritants'];
+        if(irr){
+          const tags=Object.entries(irr).filter(([,v])=>v&&v.length>0).map(([k,v])=>`<span class="itag">${k}: ${v.join(', ')}</span>`);
+          if(tags.length) irritantTags=`<div class="irritant-row" style="margin-top:5px;">${tags.join('')}</div>`;
+        }
+      }catch(e){}
+      const aiShort = (m['AI Short']||'').toString().trim();
+      const aiShortHtml = aiShort
+        ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
+        : '';
+      timeline.push({
+        ts: toMs(m['Timestamp']),
+        html: `<div class="meal-card">
           <div class="meal-card-header">
-            <span class="meal-card-name">${m['Meal Name']||'Untitled'}</span>
-            <span class="meal-card-time">${timeStr} · ${dateStr}</span>
+            <span class="meal-card-name">${escapeHtml(m['Meal Name']||'Untitled')}</span>
+            <span class="meal-card-time">${timeStr}</span>
           </div>
           <div class="pills">
             ${m['Calories']?`<span class="pill">${Math.round(m['Calories'])} kcal</span>`:''}
             ${m['Protein (g)']?`<span class="pill">P ${Math.round(m['Protein (g)'])}g</span>`:''}
             ${m['Carbs (g)']?`<span class="pill">C ${Math.round(m['Carbs (g)'])}g</span>`:''}
             ${m['Fat (g)']?`<span class="pill">F ${Math.round(m['Fat (g)'])}g</span>`:''}
-            ${m['Mood']?`<span class="pill">${m['Mood']}</span>`:''}
+            ${m['Mood']?`<span class="pill">${escapeHtml(m['Mood'])}</span>`:''}
           </div>
           ${irritantTags}
           ${aiShortHtml}
           ${hasSym
-            ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${m['Symptom Score']}/5${m['Symptom Type']?' · '+m['Symptom Type']:''}</span>
-              ${m['Symptom Time']?`<div style="font-size:11px;color:var(--tx3);margin-top:3px;">Symptoms at ${new Date(m['Symptom Time']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
-            :`<span class="pill" style="margin-top:4px;display:inline-block;">No symptoms logged</span>`}
-        </div>`;
-          }).join('')
-        : '<div class="empty-state" style="padding:1rem 0;">No earlier meals.</div>');
+            ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${escapeHtml(m['Symptom Score']||'')}/5${m['Symptom Type']?' · '+escapeHtml(m['Symptom Type']):''}</span>`
+            :``}
+        </div>`
+      });
+    });
+
+    // Symptoms (grouped by symptom day/time, not meal day)
+    const todaySymptomMeals = (state.meals||[])
+      .filter(m=>m && m['Symptom Time'] && ymdFromTimestampLocal(m['Symptom Time'])===todayKey);
+    todaySymptomMeals.forEach(m=>{
+      const st = m['Symptom Time'] ? new Date(m['Symptom Time']) : null;
+      const symptomTimeStr = (st && !isNaN(st)) ? st.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+      timeline.push({
+        ts: toMs(m['Symptom Time']),
+        html: `<div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">🌡️ Symptoms</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${symptomTimeStr}</div>
+          </div>
+          <div class="weight-item" style="padding:10px 0;">
+            <span style="font-weight:600;">${escapeHtml((m['Meal Name']||'Untitled').toString())}</span>
+            <span style="color:var(--tx2);font-size:12px;">
+              ${m['Symptom Score']?('Bloat '+escapeHtml(m['Symptom Score'])+'/5'):''}
+              ${(m['Symptom Type']||'')?(' · '+escapeHtml(String(m['Symptom Type']))):''}
+            </span>
+          </div>
+          ${m['Symptom Notes']?`<div style="font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(m['Symptom Notes'])}</div>`:''}
+        </div>`
+      });
+    });
+
+    // Bowel events (today)
+    (todayBowel||[]).forEach(b=>{
+      const d=new Date(b['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const bristol = (b['Bristol type'] ?? b['Bristol Type'] ?? b['Bristol'] ?? '').toString();
+      const linkedId = String(b['Linked meal ID'] ?? b['Linked Meal ID'] ?? b['Linked meal id'] ?? '');
+      const linkedName = linkedId ? (mealNameById.get(linkedId) || '') : '';
+      const note = (b['Notes']||'').toString().trim();
+      timeline.push({
+        ts: toMs(b['Timestamp']),
+        html: `<div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">💩 Bowel</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${timeStr}</div>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--tx2);">
+            ${bristol?`Bristol type ${escapeHtml(bristol)}`:'Bowel event'}
+            ${linkedName?` · linked to ${escapeHtml(linkedName)}`:''}
+          </div>
+          ${note?`<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(note)}</div>`:''}
+        </div>`
+      });
+    });
+
+    timeline.sort((a,b)=>b.ts-a.ts);
+
+    const todayHeader = `<div class="section-label" style="margin-bottom:8px;">Today</div>`;
+    list.innerHTML = todayHeader + (timeline.length
+      ? timeline.map(x=>x.html).join('')
+      : `<div class="empty-state" style="padding:1rem 0;">No entries yet today.</div>`);
   }catch(e){ list.innerHTML='<div class="empty-state">Failed to load: '+e.message+'</div>'; }
+}
+
+async function loadArchive(){
+  const cfg=getConfig();
+  const el=document.getElementById('archive-list');
+  if(!el) return;
+  el.innerHTML='<div class="empty-state">Loading...</div>';
+  const key=(document.getElementById('hist-date')&&document.getElementById('hist-date').value)||localYMD(new Date());
+  const q=(document.getElementById('hist-q')&&document.getElementById('hist-q').value||'').trim().toLowerCase();
+  const matchQ=(...vals)=>{
+    if(!q) return true;
+    return vals.some(v=>String(v||'').toLowerCase().includes(q));
+  };
+  try{
+    const [mealsRes,morningRes,bowelRes]=await Promise.all([
+      fetch(cfg.sheetUrl+'?t='+Date.now()),
+      fetch(cfg.sheetUrl+'?sheet=morning&t='+Date.now()),
+      fetch(cfg.sheetUrl+'?sheet=bowel&t='+Date.now())
+    ]);
+    const json=await mealsRes.json();
+    const morningJson=await morningRes.json();
+    const bowelJson=await bowelRes.json();
+    if(!json.success){ el.innerHTML='<div class="empty-state">Could not load. Check your Apps Script URL in Settings.</div>'; return; }
+
+    const meals=(json.meals||[]);
+    const mealNameById = new Map(meals.map(m=>[String(m&&m['ID']||''), (m&&m['Meal Name']||'Untitled').toString()]));
+    const toMs = (ts)=>{
+      const d=new Date(ts);
+      const t=d.getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
+
+    const timeline=[];
+
+    const morningLogs=(morningJson && morningJson.morning) ? morningJson.morning : [];
+    const dayMorning = (morningLogs||[]).slice().reverse().find(m=>dayKey(m,'Timestamp')===key);
+    if(dayMorning && matchQ('morning', dayMorning['Morning notes'], dayMorning['Stool notes'])){
+      const d=new Date(dayMorning['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const rows=[];
+      if(dayMorning['Overall feeling']) rows.push({lbl:'Overall',val:dayMorning['Overall feeling']});
+      if(dayMorning['Energy level']) rows.push({lbl:'Energy',val:dayMorning['Energy level']});
+      if(dayMorning['Bloating']) rows.push({lbl:'Bloat',val:dayMorning['Bloating']});
+      if(dayMorning['Sleep quality']) rows.push({lbl:'Sleep',val:dayMorning['Sleep quality']});
+      timeline.push({
+        ts: toMs(dayMorning['Timestamp']),
+        html: `<div class="morning-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">🌅 Morning check-in</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${timeStr}</div>
+          </div>
+          <div class="morning-scores">
+            ${rows.map(r=>`<div class="mscore"><div class="mscore-val">${escapeHtml(r.val)}</div><div class="mscore-lbl">${escapeHtml(r.lbl)}</div></div>`).join('')}
+          </div>
+        </div>`
+      });
+    }
+
+    const dayMeals = meals.filter(m=>dayKey(m,'Timestamp')===key)
+      .filter(m=>matchQ(m['Meal Name'], m['Ingredients'], m['AI Short'], m['Symptom Type'], m['Notes']));
+
+    dayMeals.forEach(m=>{
+      const d=new Date(m['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const hasSym=m['Symptom Score']||m['Symptom Type'];
+      let irritantTags='';
+      try{
+        const irr=typeof m['Irritants']==='string'&&m['Irritants']?JSON.parse(m['Irritants']):m['Irritants'];
+        if(irr){
+          const tags=Object.entries(irr).filter(([,v])=>v&&v.length>0).map(([k,v])=>`<span class="itag">${k}: ${v.join(', ')}</span>`);
+          if(tags.length) irritantTags=`<div class="irritant-row" style="margin-top:5px;">${tags.join('')}</div>`;
+        }
+      }catch(e){}
+      const aiShort = (m['AI Short']||'').toString().trim();
+      const aiShortHtml = aiShort
+        ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
+        : '';
+      timeline.push({
+        ts: toMs(m['Timestamp']),
+        html: `<div class="meal-card">
+          <div class="meal-card-header">
+            <span class="meal-card-name">${escapeHtml(m['Meal Name']||'Untitled')}</span>
+            <span class="meal-card-time">${timeStr}</span>
+          </div>
+          <div class="pills">
+            ${m['Calories']?`<span class="pill">${Math.round(m['Calories'])} kcal</span>`:''}
+            ${m['Protein (g)']?`<span class="pill">P ${Math.round(m['Protein (g)'])}g</span>`:''}
+            ${m['Carbs (g)']?`<span class="pill">C ${Math.round(m['Carbs (g)'])}g</span>`:''}
+            ${m['Fat (g)']?`<span class="pill">F ${Math.round(m['Fat (g)'])}g</span>`:''}
+            ${m['Mood']?`<span class="pill">${escapeHtml(m['Mood'])}</span>`:''}
+          </div>
+          ${irritantTags}
+          ${aiShortHtml}
+          ${hasSym
+            ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${escapeHtml(m['Symptom Score']||'')}/5${m['Symptom Type']?' · '+escapeHtml(m['Symptom Type']):''}</span>`
+            :``}
+        </div>`
+      });
+    });
+
+    const symptomMeals = meals
+      .filter(m=>m && m['Symptom Time'] && ymdFromTimestampLocal(m['Symptom Time'])===key)
+      .filter(m=>matchQ('symptoms', m['Meal Name'], m['Symptom Type'], m['Symptom Notes']));
+
+    symptomMeals.forEach(m=>{
+      const st = new Date(m['Symptom Time']);
+      const symptomTimeStr = (!isNaN(st)) ? st.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+      timeline.push({
+        ts: toMs(m['Symptom Time']),
+        html: `<div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">🌡️ Symptoms</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${symptomTimeStr}</div>
+          </div>
+          <div class="weight-item" style="padding:10px 0;">
+            <span style="font-weight:600;">${escapeHtml((m['Meal Name']||'Untitled').toString())}</span>
+            <span style="color:var(--tx2);font-size:12px;">
+              ${m['Symptom Score']?('Bloat '+escapeHtml(m['Symptom Score'])+'/5'):''}
+              ${(m['Symptom Type']||'')?(' · '+escapeHtml(String(m['Symptom Type']))):''}
+            </span>
+          </div>
+          ${m['Symptom Notes']?`<div style="font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(m['Symptom Notes'])}</div>`:''}
+        </div>`
+      });
+    });
+
+    const bowelEvents=(bowelJson && bowelJson.bowel) ? bowelJson.bowel : [];
+    const dayBowel = (bowelEvents||[]).filter(b=>dayKey(b,'Timestamp')===key);
+    dayBowel.forEach(b=>{
+      const d=new Date(b['Timestamp']);
+      const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const bristol = (b['Bristol type'] ?? b['Bristol Type'] ?? b['Bristol'] ?? '').toString();
+      const linkedId = String(b['Linked meal ID'] ?? b['Linked Meal ID'] ?? b['Linked meal id'] ?? '');
+      const linkedName = linkedId ? (mealNameById.get(linkedId) || '') : '';
+      const note = (b['Notes']||'').toString().trim();
+      if(!matchQ('bowel', bristol, linkedName, note)) return;
+      timeline.push({
+        ts: toMs(b['Timestamp']),
+        html: `<div class="card" style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">💩 Bowel</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${timeStr}</div>
+          </div>
+          <div style="margin-top:8px;font-size:12px;color:var(--tx2);">
+            ${bristol?`Bristol type ${escapeHtml(bristol)}`:'Bowel event'}
+            ${linkedName?` · linked to ${escapeHtml(linkedName)}`:''}
+          </div>
+          ${note?`<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(note)}</div>`:''}
+        </div>`
+      });
+    });
+
+    timeline.sort((a,b)=>b.ts-a.ts);
+
+    el.innerHTML = `<div class="section-label" style="margin-bottom:8px;">${escapeHtml(key)}</div>` + (timeline.length
+      ? timeline.map(x=>x.html).join('')
+      : `<div class="empty-state" style="padding:1rem 0;">No entries found.</div>`);
+
+  }catch(e){
+    el.innerHTML='<div class="empty-state">Failed to load: '+escapeHtml(e.message)+'</div>';
+  }
 }
 
 // ── WEIGHT ────────────────────────────────────────────────────────────────────
