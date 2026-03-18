@@ -9,10 +9,11 @@ Runs entirely in the browser. Data lives in your own Google Sheet. No servers, n
 ## Features
 
 - **Meal logging** — photo + ingredient input, Claude AI auto-detects meal name, calories, macros and irritant categories
+- **Foods library** — save common foods (per-serving macros + aliases) to improve analysis consistency and speed up logging
 - **Irritant tagging** — 14 categories including histamine, gluten, dairy, FODMAPs, nightshades, oxalates, lectins, salicylates, sulphur, caffeine and more
 - **Symptom tracking** — bloating score, symptom types (gas, cramps, heaviness, nausea, reflux, low energy, energy crash, weakness, migraine), linked to the triggering meal with timestamp
 - **Morning check-in** — overall feeling, energy, bloating, sleep quality, hours slept — auto-linked to previous day's meals
-- **Bowel events log** — central sheet for all bowel movements and "no movement" days, including Bristol type, first-of-day flag, linked meal ID and source (morning vs symptom)
+- **Bowel log** — separate bowel sheet for movements and explicit “no movement today” (Bristol \(0–7\)), with first-of-day flag and optional linkage back to a meal/morning log
 - **Elimination periods** — log when you start/stop eliminating irritant categories (e.g. gluten, dairy, histamine) for cleaner pattern analysis in Sheets
 - **Daily targets** — calorie and macro progress bars with remaining amounts, personalised for recomposition goal
 - **7-day history** — bar chart showing daily calorie % of target
@@ -45,7 +46,7 @@ No frameworks. No build step. No dependencies. One `index.html` file.
 ### 2. Google Sheets backend
 1. Create a new Google Sheet
 2. Go to **Extensions → Apps Script**
-3. Paste the contents of `apps-script.js` (see below), replacing all existing code
+3. Paste the contents of `apps-script-backend.js`, replacing all existing code
 4. Click **Deploy → New deployment → Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
@@ -86,6 +87,9 @@ The Apps Script automatically creates these sheets on first use:
 | Ingredients | Raw text entered by user |
 | Notes | Free text |
 | Irritants | JSON — e.g. `{"gluten":["pasta"],"fodmap":["onion","garlic"]}` |
+| AI Short | 2–3 sentence summary shown in the UI |
+| AI Long | Longer AI output stored for debugging/reference |
+| AI Breakdown | JSON (optional) — per-item breakdown if available |
 | Symptom Score | 1–5 bloating scale |
 | Symptom Type | Comma-separated symptom list |
 | Symptom Time | ISO 8601 — when symptoms started |
@@ -97,29 +101,50 @@ The Apps Script automatically creates these sheets on first use:
 | Schema | Version |
 | ID | UUID |
 | Timestamp | ISO 8601 |
-| Local date | YYYY-MM-DD |
 | Overall feeling | 1–5 |
 | Energy level | 1–5 |
 | Bloating | 1–5 |
+| Bristol type | 1–7 |
+| Stool notes | Free text |
 | Sleep quality | 1–5 |
 | Sleep hours | Decimal e.g. 7.25 = 7h 15min |
 | Morning notes | Free text |
 | Linked meal IDs | Comma-separated UUIDs of previous day's meals |
 
-Morning logs no longer store Bristol stool data directly. Bowel movements (including “no movement today”) are written to the **Bowel Events** sheet, described below.
+> Note: bowel events can be logged separately in the **Bowel** sheet (including “no movement today”), and can optionally reference a morning log and/or a linked meal.
 
 ### Weight
 | Column | Description |
 |---|---|
 | Schema | Version |
-| Local date | YYYY-MM-DD |
 | Timestamp | ISO 8601 |
 | Weight (kg) | Decimal |
 | Time of day | morning / midday / evening |
 | Notes | Free text |
 
-### Bowel Events
-Unified log for all bowel movements and explicit “no movement” days.
+### Foods
+Saved “known foods” used by the analysis prompt.
+
+| Column | Description |
+|---|---|
+| Schema | Version |
+| ID | UUID |
+| Nickname | Short lowercase key used for matching |
+| Display name | Human-friendly name |
+| Aliases | Comma-separated alternate names |
+| Serving size | Free text (e.g. “100g”, “1 bar”) |
+| Calories | kcal (per serving) |
+| Protein (g) | grams (per serving) |
+| Carbs (g) | grams (per serving) |
+| Fat (g) | grams (per serving) |
+| Source | e.g. label / USDA / manual |
+| Notes | Free text |
+| Created | ISO 8601 |
+| Updated | ISO 8601 |
+| Active | true/false (inactive foods are hidden) |
+
+### Bowel
+Unified log for all bowel movements and explicit “no movement today” days.
 
 | Column | Description |
 |---|---|
@@ -129,7 +154,8 @@ Unified log for all bowel movements and explicit “no movement” days.
 | Local date | YYYY-MM-DD |
 | Bristol type | 1–7 for real stool types, 0 = explicitly no movement that day |
 | Is first of day | true if this is the first event for that calendar day |
-| Linked meal ID | UUID of related meal (if logged from Symptoms tab) |
+| Morning log ID | UUID of related morning log (optional) |
+| Linked meal ID | UUID of related meal (optional) |
 | Notes | Free text (e.g. urgency, colour, incomplete) |
 | Source | "morning" (from morning check-in) or "symptom" (from symptoms flow) |
 
@@ -197,6 +223,7 @@ const GOALS = { cal:2100, pro:160, carb:190, fat:65 };
 
 - The Claude API key is stored in `localStorage` on your device only — it is never committed to this repo and never sent anywhere except Anthropic's API over HTTPS
 - The Apps Script URL is public but only accepts structured JSON payloads with strict validation — free text fields are truncated, numbers are range-checked, timestamps are validated
+- The UI prevents saving a meal unless the AI analysis produced valid numeric macros (helps avoid saving `NaN`/missing values)
 - The Google Sheet should remain public (anyone can call the Apps Script) — do not store sensitive personal data beyond what the app collects
 - An `Errors` sheet logs any server-side exceptions for debugging
 
