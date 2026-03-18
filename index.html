@@ -1146,7 +1146,7 @@ async function analyzeWithClaude(){
 }
 
 // ── PHOTO ─────────────────────────────────────────────────────────────────────
-function handlePhoto(input){
+async function handlePhoto(input){
   const files=Array.from(input.files||[]);
   if(!files.length) return;
   if(!state.timeUserEdited) stampNow();
@@ -1155,28 +1155,110 @@ function handlePhoto(input){
   const container=document.getElementById('photo-preview-container');
   container.innerHTML='';
 
-  let remaining=files.length;
+  document.getElementById('upload-icon').textContent='⏳';
+  document.getElementById('upload-label').textContent='Processing photos...';
 
-  files.forEach(file=>{
-    const reader=new FileReader();
-    reader.onload=e=>{
-      const dataUrl=e.target.result;
-      state.photoBase64s.push(dataUrl.split(',')[1]);
-
+  try{
+    const processed = await Promise.all(files.map(f=>compressImageFileToJpegBase64(f)));
+    processed.forEach(p=>{
+      state.photoBase64s.push(p.base64);
       const img=document.createElement('img');
-      img.src=dataUrl;
+      img.src=p.dataUrl;
       img.className='photo-preview-multi';
       container.appendChild(img);
+    });
 
-      remaining--;
-      if(remaining===0){
-        document.getElementById('upload-icon').textContent='✅';
-        document.getElementById('upload-label').textContent=
-          files.length===1?'1 photo added · tap to replace':files.length+' photos added · tap to replace';
-      }
-    };
-    reader.readAsDataURL(file);
+    document.getElementById('upload-icon').textContent='✅';
+    document.getElementById('upload-label').textContent=
+      files.length===1?'1 photo added · tap to replace':files.length+' photos added · tap to replace';
+  }catch(e){
+    console.error('Photo processing failed:',e);
+    document.getElementById('upload-icon').textContent='⚠️';
+    document.getElementById('upload-label').textContent='Photo too large to process. Try fewer photos or a smaller image.';
+    state.photoBase64s=[];
+  }
+}
+
+// Anthropic limit: each base64 image must be <= 5MB. We target ~4.6MB for safety.
+async function compressImageFileToJpegBase64(file){
+  const TARGET_BYTES = 4.6 * 1024 * 1024;
+  const MAX_BYTES = 5 * 1024 * 1024;
+  const MAX_DIM = 1600; // keeps detail, drastically reduces size for modern phones
+
+  const img = await loadImageFromFile(file);
+  let {w,h} = fitWithin(img.naturalWidth||img.width, img.naturalHeight||img.height, MAX_DIM);
+
+  // Draw once at target dimensions
+  let canvas=document.createElement('canvas');
+  canvas.width=w; canvas.height=h;
+  let ctx=canvas.getContext('2d',{alpha:false});
+  ctx.drawImage(img,0,0,w,h);
+
+  // Iteratively reduce JPEG quality until under target, then (if needed) shrink dimensions.
+  let quality=0.82;
+  let dataUrl=canvas.toDataURL('image/jpeg', quality);
+  let base64=dataUrl.split(',')[1]||'';
+  let bytes=base64Bytes(base64);
+
+  // Quality loop
+  while(bytes > TARGET_BYTES && quality > 0.45){
+    quality -= 0.07;
+    dataUrl=canvas.toDataURL('image/jpeg', quality);
+    base64=dataUrl.split(',')[1]||'';
+    bytes=base64Bytes(base64);
+  }
+
+  // Dimension loop if still too big
+  while(bytes > TARGET_BYTES){
+    w=Math.round(w*0.85); h=Math.round(h*0.85);
+    if(w<640 || h<640) break; // don't over-destroy quality
+    canvas=document.createElement('canvas');
+    canvas.width=w; canvas.height=h;
+    ctx=canvas.getContext('2d',{alpha:false});
+    ctx.drawImage(img,0,0,w,h);
+    // try a slightly higher quality after resize
+    quality=Math.min(0.82, quality+0.08);
+    dataUrl=canvas.toDataURL('image/jpeg', quality);
+    base64=dataUrl.split(',')[1]||'';
+    bytes=base64Bytes(base64);
+    while(bytes > TARGET_BYTES && quality > 0.45){
+      quality -= 0.07;
+      dataUrl=canvas.toDataURL('image/jpeg', quality);
+      base64=dataUrl.split(',')[1]||'';
+      bytes=base64Bytes(base64);
+    }
+  }
+
+  if(bytes > MAX_BYTES){
+    throw new Error(`Compressed image still >5MB (${bytes} bytes)`);
+  }
+
+  return { dataUrl, base64, bytes };
+}
+
+function loadImageFromFile(file){
+  return new Promise((resolve,reject)=>{
+    const url=URL.createObjectURL(file);
+    const img=new Image();
+    img.onload=()=>{ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror=(e)=>{ URL.revokeObjectURL(url); reject(new Error('Could not load image')); };
+    img.src=url;
   });
+}
+
+function fitWithin(w,h,maxDim){
+  if(!w||!h) return {w:maxDim,h:maxDim};
+  const m=Math.max(w,h);
+  if(m<=maxDim) return {w,h};
+  const s=maxDim/m;
+  return {w:Math.round(w*s),h:Math.round(h*s)};
+}
+
+function base64Bytes(b64){
+  // Base64 size estimate (bytes) excluding padding
+  const len=(b64||'').length;
+  const pad=(b64.endsWith('==')?2:b64.endsWith('=')?1:0);
+  return Math.floor((len*3)/4) - pad;
 }
 
 // ── SAVE MEAL ─────────────────────────────────────────────────────────────────
