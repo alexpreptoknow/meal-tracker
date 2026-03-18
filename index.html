@@ -1039,14 +1039,25 @@ function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors){
   let p=`You are a precise nutrition calculator. Respond ONLY with a single valid JSON object — no markdown, no explanation, nothing else.
 
 Required format:
-{"meal_name":"...","calories":123,"protein_g":45,"carbs_g":67,"fat_g":12,"confidence":"high","ai_short":"2-3 sentences max: what the meal contains + macro totals (kcal/P/C/F).","ai_long":"Longer reasoning: how you estimated portions + macro calc logic + assumptions + what references/sources you used.","ai_references":["USDA FoodData Central","nutrition label (if applicable)"],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
+{"meal_name":"...","calories":123,"protein_g":45,"carbs_g":67,"fat_g":12,"confidence":"high","ai_short":"2-3 sentences max: what the meal contains + macro totals (kcal/P/C/F).","ai_long":"Explain HOW you estimated portions and macros, and call out the biggest uncertainty. Do not cite database IDs.","ai_breakdown":[{"item":"whole eggs","amount":"2 large eggs","evidence":"user_text|photo_inferred|label_text|label_photo|assumed_generic","macros":{"calories":140,"protein_g":12,"carbs_g":1,"fat_g":10},"notes":"Why these assumptions."}],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
 
 Rules:
 - calories must be between 50 and 3000
 - protein_g, carbs_g, fat_g must be between 0 and 300
 - ai_short must be 2–3 sentences max and include calorie/protein/carbs/fat totals
-- ai_long must explain HOW you estimated the macros and list the references/sources you relied on (e.g. USDA FoodData Central, nutrition labels, common database averages). If you have no specific reference, say so.
-- ai_references must be an array of short strings (no URLs required)
+- ai_long must explain HOW you estimated the macros and list the biggest uncertainty (e.g. portion size, cooking oil, brand differences)
+- ai_breakdown must be an array of per-item estimates. Each item must include:
+  - item (string), amount (string)
+  - evidence: one of user_text | photo_inferred | label_text | label_photo | assumed_generic
+  - macros object with calories/protein_g/carbs_g/fat_g as numbers
+  - notes (string)
+- Evidence rules:
+  - user_text: user explicitly provided weight/measure/quantity in Ingredients text
+  - label_text: user typed a nutrition label in Ingredients text
+  - label_photo: label is visible/readable in the photo (only if clearly visible)
+  - photo_inferred: inferred from photo without readable label
+  - assumed_generic: generic assumption not directly supported by user text or photo
+- Do NOT include database IDs or fabricated citations (e.g. “FoodData Central #12345”). If you used generic nutrition knowledge, say so plainly.
 - For irritants: list the SPECIFIC ingredient names that triggered each category — empty array if none
 - meal_name should be short and human-readable`;
   if(ingredients) p+=`\n\nIngredients: "${ingredients}"\nUse as PRIMARY source for calculations.`;
@@ -1068,7 +1079,7 @@ function renderAnalysisResult(parsed,hasWarning=false){
   const confColor=parsed.confidence==='high'?'var(--green-tx)':parsed.confidence==='medium'?'#BA7517':'var(--orange-tx)';
   document.getElementById('ai-confidence').innerHTML=`<span style="color:${confColor};font-weight:600;">${parsed.confidence||'low'} confidence${hasWarning?' · ⚠️ check values':''}</span>`;
   // Show the short AI description in the UI (2–3 sentences).
-  document.getElementById('ai-notes').textContent=parsed.ai_short||parsed.notes||'';
+  document.getElementById('ai-notes').textContent=(parsed.ai_short||parsed.notes||'').trim();
 
   // Render irritant tags
   const irritants=parsed.irritants||{};
@@ -1288,8 +1299,8 @@ async function saveMeal(){
     notes:document.getElementById('meal-notes').value,
     irritants:state.aiData&&state.aiData.irritants?JSON.stringify(state.aiData.irritants):'',
     ai_short:state.aiData?state.aiData.ai_short:'',
-    ai_long:state.aiData?state.aiData.ai_long:'',
-    ai_references:state.aiData&&state.aiData.ai_references?JSON.stringify(state.aiData.ai_references):'',
+    ai_long:state.aiData?sanitizeAiText(state.aiData.ai_long):'',
+    ai_breakdown:state.aiData&&state.aiData.ai_breakdown?JSON.stringify(sanitizeAiBreakdown(state.aiData.ai_breakdown)):'',
     photo_base64:'',
     local_date:document.getElementById('meal-date').value
   };
@@ -1590,6 +1601,36 @@ function escapeHtml(s){
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;');
+}
+
+function sanitizeAiText(s){
+  if(!s) return '';
+  // Remove “fake precision” citation patterns if the model still emits them.
+  return String(s)
+    .replace(/fooddata\s*central\s*#\s*\d+/gi,'USDA FoodData Central (generic)')
+    .replace(/usda\s*#\s*\d+/gi,'USDA (generic)')
+    .trim();
+}
+
+function sanitizeAiBreakdown(bd){
+  if(!Array.isArray(bd)) return [];
+  const allowed = new Set(['user_text','photo_inferred','label_text','label_photo','assumed_generic']);
+  return bd.slice(0,30).map(x=>{
+    const macros = (x&&x.macros&&typeof x.macros==='object') ? x.macros : {};
+    const ev = (x&&typeof x.evidence==='string') ? x.evidence.trim() : '';
+    return {
+      item: sanitizeAiText(x&&x.item),
+      amount: sanitizeAiText(x&&x.amount),
+      evidence: allowed.has(ev) ? ev : 'assumed_generic',
+      macros: {
+        calories: +macros.calories||0,
+        protein_g: +macros.protein_g||0,
+        carbs_g: +macros.carbs_g||0,
+        fat_g: +macros.fat_g||0
+      },
+      notes: sanitizeAiText(x&&x.notes)
+    };
+  });
 }
 </script>
 </body>
