@@ -688,6 +688,13 @@ const BRISTOL_COLORS = {1:'sel-orange',2:'sel-orange',3:'sel-green',4:'sel-green
 
 
 // ── DATE HELPERS ─────────────────────────────────────────────────────────────
+function localYMD(d=new Date()){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 // Safely construct an ISO timestamp from separate date and time strings.
 // Uses explicit numeric constructor instead of new Date(string) because
 // iOS Safari is strict about date string formats and throws
@@ -733,10 +740,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   const now=new Date();
   document.getElementById('today-date').textContent=now.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   stampNow();
-  document.getElementById('sym-date').value=now.toISOString().slice(0,10);
+  document.getElementById('sym-date').value=localYMD(now);
   document.getElementById('sym-time').value=now.toTimeString().slice(0,5);
-  document.getElementById('w-date').value=now.toISOString().slice(0,10);
-  document.getElementById('m-date').value=now.toISOString().slice(0,10);
+  document.getElementById('w-date').value=localYMD(now);
+  document.getElementById('m-date').value=localYMD(now);
   document.getElementById('m-time').value=now.toTimeString().slice(0,5);
   const cfg=getConfig();
   if(cfg.claudeKey) document.getElementById('cfg-claude').value=cfg.claudeKey;
@@ -763,7 +770,7 @@ function showSection(name){
 // ── TIMESTAMP ────────────────────────────────────────────────────────────────
 function stampNow(){
   const now=new Date();
-  document.getElementById('meal-date').value=now.toISOString().slice(0,10);
+  document.getElementById('meal-date').value=localYMD(now);
   document.getElementById('meal-time').value=now.toTimeString().slice(0,5);
   state.timeUserEdited=false;
   document.getElementById('auto-tag').style.display='inline';
@@ -784,7 +791,7 @@ async function checkMorningBanner(){
     const res=await fetch(cfg.sheetUrl+'?sheet=morning&t='+Date.now());
     const json=await res.json();
     // Use local_date if available, fall back to timestamp comparison
-    const todayLocal=new Date().toISOString().slice(0,10);
+    const todayLocal=localYMD(new Date());
     const todayLog=(json.morning||[]).find(m=>
       (m['Local date']&&m['Local date'].toString().slice(0,10)===todayLocal) ||
       new Date(m['Timestamp']).toDateString()===new Date().toDateString()
@@ -893,7 +900,7 @@ async function loadPrevMeals(){
     if(!json.success||!json.meals.length){ card.style.display='none'; return; }
     // Use local_date for reliable day matching without timezone issues
     const yesterday=new Date(); yesterday.setDate(yesterday.getDate()-1);
-    const yLocal=yesterday.toISOString().slice(0,10);
+    const yLocal=localYMD(yesterday);
     const prevMeals=json.meals.filter(m=>
       (m['Local date']&&m['Local date'].toString().slice(0,10)===yLocal) ||
       new Date(m['Timestamp']).toDateString()===yesterday.toDateString()
@@ -1601,7 +1608,7 @@ async function loadMealsForSelect(){
   const sel=document.getElementById('sym-meal-select');
   sel.innerHTML='<option>Loading...</option>';
   const now=new Date();
-  document.getElementById('sym-date').value=now.toISOString().slice(0,10);
+  document.getElementById('sym-date').value=localYMD(now);
   document.getElementById('sym-time').value=now.toTimeString().slice(0,5);
   try{
     const res=await fetch(cfg.sheetUrl+'?t='+Date.now());
@@ -1721,12 +1728,22 @@ async function loadHistory(){
   const list=document.getElementById('history-list');
   list.innerHTML='<div class="empty-state">Loading...</div>';
   try{
-    const res=await fetch(cfg.sheetUrl+'?t='+Date.now());
-    const json=await res.json();
+    const [mealsRes,morningRes,bowelRes]=await Promise.all([
+      fetch(cfg.sheetUrl+'?t='+Date.now()),
+      fetch(cfg.sheetUrl+'?sheet=morning&t='+Date.now()),
+      fetch(cfg.sheetUrl+'?sheet=bowel&t='+Date.now())
+    ]);
+    const json=await mealsRes.json();
+    const morningJson=await morningRes.json();
+    const bowelJson=await bowelRes.json();
     if(!json.success){ list.innerHTML='<div class="empty-state">Could not load. Check your Apps Script URL in Settings.</div>'; return; }
     state.meals=json.meals||[];
-    const today=new Date().toDateString();
-    const todayMeals=state.meals.filter(m=>new Date(m['Timestamp']).toDateString()===today);
+    const todayKey=localYMD(new Date());
+    const todayMeals=state.meals.filter(m=>{
+      const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
+      if(ld) return ld===todayKey;
+      return new Date(m['Timestamp']).toDateString()===new Date().toDateString();
+    });
     let tCal=0,tPro=0,tCarb=0,tFat=0;
     todayMeals.forEach(m=>{ tCal+=parseFloat(m['Calories'])||0; tPro+=parseFloat(m['Protein (g)'])||0; tCarb+=parseFloat(m['Carbs (g)'])||0; tFat+=parseFloat(m['Fat (g)'])||0; });
     document.getElementById('rem-cal').textContent=Math.max(0,GOALS.cal-Math.round(tCal));
@@ -1742,7 +1759,14 @@ async function loadHistory(){
     const weekData=[];
     for(let i=6;i>=0;i--){
       const d=new Date(now); d.setDate(now.getDate()-i);
-      const cal=state.meals.filter(m=>new Date(m['Timestamp']).toDateString()===d.toDateString()).reduce((s,m)=>s+(parseFloat(m['Calories'])||0),0);
+      const key=localYMD(d);
+      const cal=state.meals
+        .filter(m=>{
+          const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
+          if(ld) return ld===key;
+          return new Date(m['Timestamp']).toDateString()===d.toDateString();
+        })
+        .reduce((s,m)=>s+(parseFloat(m['Calories'])||0),0);
       const pct=Math.min(140,Math.round(cal/GOALS.cal*100));
       weekData.push({label:d.toLocaleDateString('en-GB',{weekday:'short'}),pct});
     }
@@ -1754,10 +1778,121 @@ async function loadHistory(){
     }).join('');
     document.getElementById('week-labels').innerHTML=weekData.map(d=>`<span class="wbar-day">${d.label}</span>`).join('');
 
-    if(!state.meals.length){ list.innerHTML='<div class="empty-state">No meals logged yet.</div>'; return; }
+    const morningLogs=(morningJson && morningJson.morning) ? morningJson.morning : [];
+    const todayMorning = (morningLogs||[]).slice().reverse().find(m=>{
+      const ts = m && m['Timestamp'] ? new Date(m['Timestamp']) : null;
+      return ts && !isNaN(ts) && ts.toDateString()===new Date().toDateString();
+    });
 
-    list.innerHTML='<div class="section-label" style="margin-bottom:8px;">Meal log</div>'+
-      [...state.meals].reverse().map(m=>{
+    const bowelEvents=(bowelJson && bowelJson.bowel) ? bowelJson.bowel : [];
+    const todayBowel = (bowelEvents||[]).slice().reverse().filter(b=>{
+      const ld=(b['Local date']||b['Local Date']||'').toString().slice(0,10);
+      if(ld) return ld===todayKey;
+      const ts = b && b['Timestamp'] ? new Date(b['Timestamp']) : null;
+      return ts && !isNaN(ts) && ts.toDateString()===new Date().toDateString();
+    });
+
+    const todaySymptoms = todayMeals
+      .filter(m=>m['Symptom Score']||m['Symptom Type']||m['Symptom Time'])
+      .map(m=>{
+        const st = m['Symptom Time'] ? new Date(m['Symptom Time']) : null;
+        const symptomTimeStr = (st && !isNaN(st))
+          ? st.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})
+          : '';
+        return {
+          mealName: (m['Meal Name']||'Untitled').toString(),
+          score: m['Symptom Score']||'',
+          type: (m['Symptom Type']||'').toString(),
+          time: symptomTimeStr
+        };
+      });
+
+    const todayHeader = `<div class="section-label" style="margin-bottom:8px;">Today</div>`;
+    const todayCards = [
+      (todayMorning ? (() => {
+        const d=new Date(todayMorning['Timestamp']);
+        const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const rows=[];
+        if(todayMorning['Overall feeling']) rows.push({lbl:'Overall',val:todayMorning['Overall feeling']});
+        if(todayMorning['Energy level']) rows.push({lbl:'Energy',val:todayMorning['Energy level']});
+        if(todayMorning['Bloating']) rows.push({lbl:'Bloat',val:todayMorning['Bloating']});
+        if(todayMorning['Sleep quality']) rows.push({lbl:'Sleep',val:todayMorning['Sleep quality']});
+        return `<div class="morning-card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-weight:600;">🌅 Morning check-in</div>
+            <div style="font-size:11px;color:var(--tx2);white-space:nowrap;">${timeStr}</div>
+          </div>
+          <div class="morning-scores">
+            ${rows.map(r=>`<div class="mscore"><div class="mscore-val">${escapeHtml(r.val)}</div><div class="mscore-lbl">${escapeHtml(r.lbl)}</div></div>`).join('')}
+          </div>
+          ${todayBowel.length ? `<div style="margin-top:8px;font-size:11px;color:var(--tx2);">💩 Bowel: ${todayBowel.map(b=>`type ${escapeHtml(b['Bristol type']??b['Bristol type']??b['Bristol']??b['Bristol Type']??b['Bristol type'])}`).join(', ')}</div>` : ''}
+        </div>`;
+      })() : `<div class="empty-state" style="padding:1rem 0;">No morning check-in yet.</div>`),
+
+      (todaySymptoms.length ? `<div class="card" style="margin-bottom:10px;">
+        <div class="section-label" style="margin-bottom:8px;">Symptoms</div>
+        ${todaySymptoms.map(s=>`<div class="weight-item" style="padding:10px 0;">
+          <span style="font-weight:600;">${escapeHtml(s.mealName)}</span>
+          <span style="color:var(--tx2);font-size:12px;">${s.time?s.time+' · ':''}${s.score?('Bloat '+escapeHtml(s.score)+'/5'):''}${s.type?(' · '+escapeHtml(s.type)):""}</span>
+        </div>`).join('')}
+      </div>` : `<div class="empty-state" style="padding:1rem 0;">No symptoms logged today.</div>`)
+    ].join('');
+
+    const todayMealsHtml = todayMeals.length
+      ? `<div class="section-label" style="margin:14px 0 8px;">Meals</div>` +
+        [...todayMeals].slice().reverse().map(m=>{
+          const d=new Date(m['Timestamp']);
+          const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+          const hasSym=m['Symptom Score']||m['Symptom Type'];
+          let irritantTags='';
+          try{
+            const irr=typeof m['Irritants']==='string'&&m['Irritants']?JSON.parse(m['Irritants']):m['Irritants'];
+            if(irr){
+              const tags=Object.entries(irr).filter(([,v])=>v&&v.length>0).map(([k,v])=>`<span class="itag">${k}: ${v.join(', ')}</span>`);
+              if(tags.length) irritantTags=`<div class="irritant-row" style="margin-top:5px;">${tags.join('')}</div>`;
+            }
+          }catch(e){}
+          const aiShort = (m['AI Short']||'').toString().trim();
+          const aiShortHtml = aiShort
+            ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
+            : '';
+          return `<div class="meal-card">
+            <div class="meal-card-header">
+              <span class="meal-card-name">${m['Meal Name']||'Untitled'}</span>
+              <span class="meal-card-time">${timeStr}</span>
+            </div>
+            <div class="pills">
+              ${m['Calories']?`<span class="pill">${Math.round(m['Calories'])} kcal</span>`:''}
+              ${m['Protein (g)']?`<span class="pill">P ${Math.round(m['Protein (g)'])}g</span>`:''}
+              ${m['Carbs (g)']?`<span class="pill">C ${Math.round(m['Carbs (g)'])}g</span>`:''}
+              ${m['Fat (g)']?`<span class="pill">F ${Math.round(m['Fat (g)'])}g</span>`:''}
+              ${m['Mood']?`<span class="pill">${m['Mood']}</span>`:''}
+            </div>
+            ${irritantTags}
+            ${aiShortHtml}
+            ${hasSym
+              ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${m['Symptom Score']}/5${m['Symptom Type']?' · '+m['Symptom Type']:''}</span>`
+              :``}
+          </div>`;
+        }).join('')
+      : `<div class="empty-state" style="padding:1rem 0;">No meals logged today yet.</div>`;
+
+    if(!state.meals.length){
+      list.innerHTML = todayHeader + todayCards + todayMealsHtml;
+      return;
+    }
+
+    const earlierMeals=[...state.meals].filter(m=>{
+      const ld=(m['Local date']||m['Local Date']||'').toString().slice(0,10);
+      if(ld) return ld!==todayKey;
+      return new Date(m['Timestamp']).toDateString()!==new Date().toDateString();
+    });
+
+    list.innerHTML=
+      todayHeader + todayCards + todayMealsHtml +
+      (earlierMeals.length
+        ? '<div class="section-label" style="margin:16px 0 8px;">Earlier</div>' +
+          earlierMeals.slice().reverse().map(m=>{
         const d=new Date(m['Timestamp']);
         const timeStr=isNaN(d)?'':d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
         const dateStr=isNaN(d)?'':d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
@@ -1797,7 +1932,8 @@ async function loadHistory(){
               ${m['Symptom Time']?`<div style="font-size:11px;color:var(--tx3);margin-top:3px;">Symptoms at ${new Date(m['Symptom Time']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
             :`<span class="pill" style="margin-top:4px;display:inline-block;">No symptoms logged</span>`}
         </div>`;
-      }).join('');
+          }).join('')
+        : '<div class="empty-state" style="padding:1rem 0;">No earlier meals.</div>');
   }catch(e){ list.innerHTML='<div class="empty-state">Failed to load: '+e.message+'</div>'; }
 }
 
