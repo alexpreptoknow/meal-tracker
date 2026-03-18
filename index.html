@@ -1147,7 +1147,9 @@ async function analyzeWithClaude(){
 
 // ── PHOTO ─────────────────────────────────────────────────────────────────────
 async function handlePhoto(input){
-  const files=Array.from(input.files||[]);
+  const allFiles=Array.from(input.files||[]);
+  // Keep requests predictable: limit number of photos we send to Claude.
+  const files=allFiles.slice(0,3);
   if(!files.length) return;
   if(!state.timeUserEdited) stampNow();
 
@@ -1156,7 +1158,10 @@ async function handlePhoto(input){
   container.innerHTML='';
 
   document.getElementById('upload-icon').textContent='⏳';
-  document.getElementById('upload-label').textContent='Processing photos...';
+  document.getElementById('upload-label').textContent=
+    (allFiles.length>files.length)
+      ? `Processing ${files.length} of ${allFiles.length} photos (limit ${files.length})...`
+      : 'Processing photos...';
 
   try{
     const processed = await Promise.all(files.map(f=>compressImageFileToJpegBase64(f)));
@@ -1170,7 +1175,9 @@ async function handlePhoto(input){
 
     document.getElementById('upload-icon').textContent='✅';
     document.getElementById('upload-label').textContent=
-      files.length===1?'1 photo added · tap to replace':files.length+' photos added · tap to replace';
+      (allFiles.length>files.length)
+        ? `${files.length} photos added (limited from ${allFiles.length}) · tap to replace`
+        : (files.length===1?'1 photo added · tap to replace':files.length+' photos added · tap to replace');
   }catch(e){
     console.error('Photo processing failed:',e);
     document.getElementById('upload-icon').textContent='⚠️';
