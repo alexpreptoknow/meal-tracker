@@ -259,6 +259,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
         </div>
         <div id="ai-irritants" class="irritant-row"></div>
         <div id="ai-notes" style="font-size:11px;color:var(--tx2);margin-top:8px;line-height:1.5;"></div>
+        <pre id="ai-debug" style="display:none;margin-top:10px;white-space:pre-wrap;font-size:10px;line-height:1.35;color:var(--tx3);background:var(--bg);border:0.5px solid var(--bd);border-radius:var(--r);padding:10px;"></pre>
       </div>
     </div>
 
@@ -974,7 +975,18 @@ async function callClaude(claudeKey,content,maxTokens=800){
     throw new Error(json.error||'Proxy call failed');
   }
   const parsed=JSON.parse(json.raw);
-  return parsed.content[0].text;
+  // Anthropic returns an array of content blocks; join all text blocks safely.
+  if(parsed && Array.isArray(parsed.content)){
+    const text = parsed.content
+      .filter(b=>b && b.type==='text' && typeof b.text==='string')
+      .map(b=>b.text)
+      .join('\n')
+      .trim();
+    if(text) return text;
+  }
+  // Fallbacks for unexpected shapes
+  if(parsed && typeof parsed.text === 'string') return parsed.text;
+  return JSON.stringify(parsed);
 }
 
 function extractJSON(raw){
@@ -1083,7 +1095,10 @@ async function analyzeWithClaude(){
       lastRaw=rawText;
       let parsed;
       try{ parsed=extractJSON(rawText); }
-      catch(e){ lastErrors=['Response was not valid JSON: '+e.message]; continue; }
+      catch(e){
+        lastErrors=['Response was not valid JSON: '+e.message];
+        continue;
+      }
       const errors=validateMacros(parsed);
       if(errors.length){ lastErrors=errors; continue; }
       renderAnalysisResult(parsed);
@@ -1101,7 +1116,16 @@ async function analyzeWithClaude(){
   let partial=null;
   try{ partial=extractJSON(lastRaw); }catch(e){}
   if(partial){ renderAnalysisResult(partial,true); showStatus('log-status','Auto-analysis had issues — please check values.',false); }
-  else showStatus('log-status','Could not analyze. Try re-analyzing or enter macros manually.',false);
+  else {
+    // Surface useful diagnostics without requiring devtools.
+    const dbg=(lastErrors&&lastErrors.length)?lastErrors.join(' · '):'No additional details.';
+    showStatus('log-status','Could not analyze. '+dbg+' Try re-analyzing or enter macros manually.',false);
+    const dbgEl=document.getElementById('ai-debug');
+    if(dbgEl){
+      dbgEl.style.display='block';
+      dbgEl.textContent = 'Debug:\n' + dbg + '\n\nRaw Claude output (truncated):\n' + String(lastRaw||'').slice(0,2000);
+    }
+  }
 }
 
 // ── PHOTO ─────────────────────────────────────────────────────────────────────
