@@ -1099,12 +1099,31 @@ function validateMacros(parsed){
   for(const f of required){
     if(parsed[f]===undefined||parsed[f]===null||parsed[f]==='') errors.push('missing field: '+f);
   }
+  // Require numeric, finite macro values (prevents "NaN", "unknown", etc.)
+  for(const field of Object.keys(MACRO_LIMITS)){
+    const raw = parsed[field];
+    const val = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/,/g,'').trim());
+    if(!Number.isFinite(val)){
+      errors.push(field+' must be a number (got: '+String(raw)+')');
+    }
+  }
   for(const [field,limits] of Object.entries(MACRO_LIMITS)){
-    const val=parseFloat(parsed[field]);
-    if(!isNaN(val)&&(val<limits.min||val>limits.max))
+    const raw = parsed[field];
+    const val = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/,/g,'').trim());
+    if(Number.isFinite(val) && (val<limits.min||val>limits.max))
       errors.push(field+' value '+val+' is outside plausible range '+limits.min+'–'+limits.max);
   }
   return errors;
+}
+
+function normalizeMacros(parsed){
+  const out = Object.assign({}, parsed||{});
+  for(const field of ['calories','protein_g','carbs_g','fat_g']){
+    const raw = out[field];
+    const val = typeof raw === 'number' ? raw : parseFloat(String(raw).replace(/,/g,'').trim());
+    out[field] = Number.isFinite(val) ? val : null;
+  }
+  return out;
 }
 
 function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors,foodsLibrary){
@@ -1149,28 +1168,30 @@ Rules:
 }
 
 function renderAnalysisResult(parsed,hasWarning=false){
-  document.getElementById('ai-meal-name').textContent=parsed.meal_name||'';
-  document.getElementById('ai-cal').textContent=parsed.calories?Math.round(parsed.calories):'?';
-  document.getElementById('ai-pro').textContent=parsed.protein_g?Math.round(parsed.protein_g)+'g':'?';
-  document.getElementById('ai-carb').textContent=parsed.carbs_g?Math.round(parsed.carbs_g)+'g':'?';
-  document.getElementById('ai-fat').textContent=parsed.fat_g?Math.round(parsed.fat_g)+'g':'?';
-  const confColor=parsed.confidence==='high'?'var(--green-tx)':parsed.confidence==='medium'?'#BA7517':'var(--orange-tx)';
-  document.getElementById('ai-confidence').innerHTML=`<span style="color:${confColor};font-weight:600;">${parsed.confidence||'low'} confidence${hasWarning?' · ⚠️ check values':''}</span>`;
+  const p = normalizeMacros(parsed);
+  document.getElementById('ai-meal-name').textContent=p.meal_name||'';
+  document.getElementById('ai-cal').textContent=Number.isFinite(p.calories)?Math.round(p.calories):'?';
+  document.getElementById('ai-pro').textContent=Number.isFinite(p.protein_g)?Math.round(p.protein_g)+'g':'?';
+  document.getElementById('ai-carb').textContent=Number.isFinite(p.carbs_g)?Math.round(p.carbs_g)+'g':'?';
+  document.getElementById('ai-fat').textContent=Number.isFinite(p.fat_g)?Math.round(p.fat_g)+'g':'?';
+  const confColor=p.confidence==='high'?'var(--green-tx)':p.confidence==='medium'?'#BA7517':'var(--orange-tx)';
+  document.getElementById('ai-confidence').innerHTML=`<span style="color:${confColor};font-weight:600;">${p.confidence||'low'} confidence${hasWarning?' · ⚠️ check values':''}</span>`;
   // Show the short AI description in the UI (2–3 sentences).
-  document.getElementById('ai-notes').textContent=(parsed.ai_short||parsed.notes||'').trim();
+  document.getElementById('ai-notes').textContent=(p.ai_short||p.notes||'').trim();
 
   // Render irritant tags
-  const irritants=parsed.irritants||{};
+  const irritants=p.irritants||{};
   const tags=[];
   for(const [cat,items] of Object.entries(irritants)){
     if(items&&items.length>0) tags.push(`<span class="itag">${cat}: ${items.join(', ')}</span>`);
   }
   document.getElementById('ai-irritants').innerHTML=tags.join('');
 
-  if(!document.getElementById('meal-name').value&&parsed.meal_name)
-    document.getElementById('meal-name').value=parsed.meal_name;
+  if(!document.getElementById('meal-name').value&&p.meal_name)
+    document.getElementById('meal-name').value=p.meal_name;
   document.getElementById('ai-result').style.display='block';
-  state.aiData=parsed;
+  // Only allow saving when we have a fully valid analysis.
+  state.aiData = hasWarning ? null : p;
 }
 
 async function analyzeWithClaude(){
@@ -1225,6 +1246,7 @@ async function analyzeWithClaude(){
         lastErrors=['Response was not valid JSON: '+e.message];
         continue;
       }
+      parsed = normalizeMacros(parsed);
       const errors=validateMacros(parsed);
       if(errors.length){ lastErrors=errors; continue; }
       renderAnalysisResult(parsed);
@@ -1241,7 +1263,11 @@ async function analyzeWithClaude(){
   btn.textContent='Re-analyze'; btn.disabled=false;
   let partial=null;
   try{ partial=extractJSON(lastRaw); }catch(e){}
-  if(partial){ renderAnalysisResult(partial,true); showStatus('log-status','Auto-analysis had issues — please check values.',false); }
+  if(partial){
+    partial = normalizeMacros(partial);
+    renderAnalysisResult(partial,true);
+    showStatus('log-status','Auto-analysis had issues — please re-analyze (or edit ingredients) before saving.',false);
+  }
   else {
     // Surface useful diagnostics without requiring devtools.
     const dbg=(lastErrors&&lastErrors.length)?lastErrors.join(' · '):'No additional details.';
@@ -1573,6 +1599,17 @@ async function saveMeal(){
   const btn=document.getElementById('save-meal-btn');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span>Saving...';
   const cfg=getConfig();
+  if(!state.aiData){
+    showStatus('log-status','Please run analysis and ensure macros look correct before saving.',false);
+    btn.disabled=false; btn.textContent='Save meal';
+    return;
+  }
+  const aiErrors = validateMacros(state.aiData);
+  if(aiErrors.length){
+    showStatus('log-status','Cannot save: '+aiErrors.join(' · '),false);
+    btn.disabled=false; btn.textContent='Save meal';
+    return;
+  }
   const dv=document.getElementById('meal-date').value;
   const tv=document.getElementById('meal-time').value;
   const ts=toISO(dv,tv);
