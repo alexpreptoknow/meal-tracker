@@ -1129,18 +1129,62 @@ async function probeSheetUrl(url){
 }
 
 function extractJSON(raw){
-  let text=raw.replace(/```json|```/gi,'').trim();
-  const s=text.indexOf('{'), e=text.lastIndexOf('}');
-  if(s===-1||e===-1) throw new Error('No JSON found in response');
-  let candidate=text.slice(s,e+1);
-  // Common model formatting issues:
-  // - smart quotes
-  // - trailing commas
-  candidate=candidate
+  // Claude sometimes wraps JSON in fences, adds pre/post text, or (rarely) returns an array.
+  const normalizeText=(s)=>String(s||'')
+    .replace(/```(?:json)?/gi,'')
+    .replace(/```/g,'')
+    .trim()
+    // Common model formatting issues: smart quotes + trailing commas
     .replace(/[“”]/g,'"')
     .replace(/[‘’]/g,"'")
     .replace(/,\s*([}\]])/g,'$1');
-  return JSON.parse(candidate);
+
+  const text=normalizeText(raw);
+  if(!text) throw new Error('Empty response');
+
+  // Best case: the whole response is JSON.
+  try{
+    const direct=JSON.parse(text);
+    if(Array.isArray(direct) && direct.length===1 && typeof direct[0]==='object') return direct[0];
+    return direct;
+  }catch(_e){}
+
+  // Otherwise, extract the first balanced JSON object/array substring.
+  const extractBalanced=(src,startIdx,openCh,closeCh)=>{
+    let depth=0, inStr=false, esc=false;
+    for(let i=startIdx;i<src.length;i++){
+      const ch=src[i];
+      if(inStr){
+        if(esc){ esc=false; continue; }
+        if(ch==='\\'){ esc=true; continue; }
+        if(ch==='"'){ inStr=false; continue; }
+        continue;
+      }
+      if(ch==='"'){ inStr=true; continue; }
+      if(ch===openCh) depth++;
+      if(ch===closeCh) depth--;
+      if(depth===0) return src.slice(startIdx,i+1);
+    }
+    return null;
+  };
+
+  const firstObj=text.indexOf('{');
+  const firstArr=text.indexOf('[');
+  const start =
+    (firstObj===-1) ? firstArr :
+    (firstArr===-1) ? firstObj :
+    Math.min(firstObj, firstArr);
+
+  if(start===-1) throw new Error('No JSON found in response');
+
+  const open=text[start];
+  const close=(open==='[')?']':'}';
+  const candidate=extractBalanced(text,start,open,close);
+  if(!candidate) throw new Error(`Unclosed JSON starting with ${open}`);
+
+  const parsed=JSON.parse(candidate);
+  if(Array.isArray(parsed) && parsed.length===1 && typeof parsed[0]==='object') return parsed[0];
+  return parsed;
 }
 
 function validateMacros(parsed){
@@ -1288,7 +1332,7 @@ async function analyzeWithClaude(){
         }
       }
       content.push({type:'text',text:prompt});
-      const rawText=await callClaude(cfg.claudeKey,content);
+      const rawText=await callClaude(cfg.claudeKey,content,1400);
       lastRaw=rawText;
       let parsed;
       try{ parsed=extractJSON(rawText); }
