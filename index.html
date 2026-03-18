@@ -1003,11 +1003,14 @@ function buildPrompt(ingredients,hasPhoto,prevOutput,prevErrors){
   let p=`You are a precise nutrition calculator. Respond ONLY with a single valid JSON object — no markdown, no explanation, nothing else.
 
 Required format:
-{"meal_name":"...","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"high|medium|low","notes":"brief explanation of estimates","irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
+{"meal_name":"...","calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":"high|medium|low","ai_short":"2–3 sentences max: what the meal contains + macro totals","ai_long":"longer reasoning: how you estimated portions + macro calc logic + assumptions + what references/sources you used","ai_references":[string,string],"irritants":{"histamine":[],"mast_cell":[],"gluten":[],"dairy":[],"fodmap":[],"nightshade":[],"oxalate":[],"lectin":[],"salicylate":[],"sulphur":[],"high_fat":[],"seed_oil":[],"caffeine":[],"high_sugar":[]}}
 
 Rules:
 - calories must be between 50 and 3000
 - protein_g, carbs_g, fat_g must be between 0 and 300
+- ai_short must be 2–3 sentences max and include calorie/protein/carbs/fat totals
+- ai_long must explain HOW you estimated the macros and list the references/sources you relied on (e.g. USDA FoodData Central, nutrition labels, common database averages). If you have no specific reference, say so.
+- ai_references must be an array of short strings (no URLs required)
 - For irritants: list the SPECIFIC ingredient names that triggered each category — empty array if none
 - meal_name should be short and human-readable`;
   if(ingredients) p+=`\n\nIngredients: "${ingredients}"\nUse as PRIMARY source for calculations.`;
@@ -1028,7 +1031,8 @@ function renderAnalysisResult(parsed,hasWarning=false){
   document.getElementById('ai-fat').textContent=parsed.fat_g?Math.round(parsed.fat_g)+'g':'?';
   const confColor=parsed.confidence==='high'?'var(--green-tx)':parsed.confidence==='medium'?'#BA7517':'var(--orange-tx)';
   document.getElementById('ai-confidence').innerHTML=`<span style="color:${confColor};font-weight:600;">${parsed.confidence||'low'} confidence${hasWarning?' · ⚠️ check values':''}</span>`;
-  document.getElementById('ai-notes').textContent=parsed.notes||'';
+  // Show the short AI description in the UI (2–3 sentences).
+  document.getElementById('ai-notes').textContent=parsed.ai_short||parsed.notes||'';
 
   // Render irritant tags
   const irritants=parsed.irritants||{};
@@ -1145,6 +1149,9 @@ async function saveMeal(){
     ingredients:document.getElementById('ingredients').value,
     notes:document.getElementById('meal-notes').value,
     irritants:state.aiData&&state.aiData.irritants?JSON.stringify(state.aiData.irritants):'',
+    ai_short:state.aiData?state.aiData.ai_short:'',
+    ai_long:state.aiData?state.aiData.ai_long:'',
+    ai_references:state.aiData&&state.aiData.ai_references?JSON.stringify(state.aiData.ai_references):'',
     photo_base64:'',
     local_date:document.getElementById('meal-date').value
   };
@@ -1335,6 +1342,11 @@ async function loadHistory(){
           }
         }catch(e){}
 
+        const aiShort = (m['AI Short']||'').toString().trim();
+        const aiShortHtml = aiShort
+          ? `<div style="margin-top:6px;font-size:11px;color:var(--tx2);line-height:1.45;">${escapeHtml(aiShort)}</div>`
+          : '';
+
         return `<div class="meal-card">
           <div class="meal-card-header">
             <span class="meal-card-name">${m['Meal Name']||'Untitled'}</span>
@@ -1348,6 +1360,7 @@ async function loadHistory(){
             ${m['Mood']?`<span class="pill">${m['Mood']}</span>`:''}
           </div>
           ${irritantTags}
+          ${aiShortHtml}
           ${hasSym
             ?`<span class="pill pill-red" style="margin-top:4px;display:inline-block;">Bloat ${m['Symptom Score']}/5${m['Symptom Type']?' · '+m['Symptom Type']:''}</span>
               ${m['Symptom Time']?`<div style="font-size:11px;color:var(--tx3);margin-top:3px;">Symptoms at ${new Date(m['Symptom Time']).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
@@ -1430,6 +1443,15 @@ function showStatus(id,msg,ok){
         Dismiss
       </button>`;
   }
+}
+
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
 }
 </script>
 </body>
